@@ -6,6 +6,7 @@ import DocumentForm from './components/DocumentForm';
 import DocumentDetail from './components/DocumentDetail';
 import documentController from './controllers/documentController';
 import { Inbox, Send, Clock, CheckCircle } from 'lucide-react';
+import './App.css';
 
 function App() {
   const [activeTab, setActiveTab] = useState('incoming');

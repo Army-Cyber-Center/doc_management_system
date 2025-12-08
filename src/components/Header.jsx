@@ -56,7 +56,7 @@ function Header() {
                 <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-white"></div>
               </div>
               <div className="hidden md:block">
-                <p className="text-sm font-semibold text-gray-900">สมชาย ใจดี</p>
+                <p className="text-sm font-semibold text-gray-900"> ณัฐธลภัส  ศรีสง่า</p>
                 <p className="text-xs text-gray-500">ผู้ดูแลระบบ</p>
               </div>
             </div>

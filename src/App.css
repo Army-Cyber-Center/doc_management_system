@@ -1,0 +1,65 @@
+/* Thai Language Support with TH Sarabun PSK */
+@import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@100;200;300;400;500;600;700;800&display=swap');
+
+* {
+  font-family: 'Sarabun', sans-serif !important;
+}
+
+/* Better Thai text rendering */
+body {
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Thai text specific styles */
+.thai-text {
+  line-height: 1.8;
+  letter-spacing: 0.01em;
+}
+
+/* Headings with Sarabun */
+h1, h2, h3, h4, h5, h6 {
+  font-family: 'Sarabun', sans-serif;
+  font-weight: 600;
+}
+
+/* Input and textarea Thai support */
+input, textarea, select {
+  font-family: 'Sarabun', sans-serif;
+  font-size: 16px;
+}
+
+/* Button Thai text */
+button {
+  font-family: 'Sarabun', sans-serif;
+  font-weight: 500;
+}
+
+/* OCR Text Display */
+.ocr-text {
+  font-family: 'Sarabun', sans-serif;
+  font-weight: 400;
+  line-height: 1.8;
+}
+
+/* Document Title */
+.document-title {
+  font-family: 'Sarabun', sans-serif;
+  font-weight: 700;
+  font-size: 1.5rem;
+  line-height: 1.6;
+}
+
+/* Labels and small text */
+label, .label-text {
+  font-family: 'Sarabun', sans-serif;
+  font-weight: 500;
+}
+
+/* Better rendering for Thai characters */
+@supports (font-feature-settings: "liga") {
+  * {
+    font-feature-settings: "liga", "kern";
+  }
+}

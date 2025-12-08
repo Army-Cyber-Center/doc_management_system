@@ -106,11 +106,11 @@ class DocumentController {
 
   getMockDocuments(filters) {
     const mockData = [
-      { id: 1, title: 'หนังสือขออนุมัติงบประมาณ', from: 'กองคลัง', date: '2025-10-19', status: 'รับแล้ว', priority: 'สูง', type: 'incoming', dueDate: '2025-10-25' },
-      { id: 2, title: 'บันทึกข้อความ เรื่อง การประชุม', from: 'ฝ่ายบริหาร', date: '2025-10-18', status: 'รอดำเนินการ', priority: 'กลาง', type: 'incoming', dueDate: '2025-10-22' },
-      { id: 3, title: 'แบบฟอร์มขอลาพักร้อน', from: 'ฝ่ายทรัพยากรบุคคล', date: '2025-10-17', status: 'เสร็จสิ้น', priority: 'ต่ำ', type: 'incoming', dueDate: '2025-10-20' },
-      { id: 4, title: 'หนังสือตอบกลับงบประมาณ', to: 'กองคลัง', date: '2025-10-19', status: 'ส่งแล้ว', priority: 'สูง', type: 'outgoing' },
-      { id: 5, title: 'บันทึกข้อความภายใน', to: 'ฝ่ายปฏิบัติการ', date: '2025-10-18', status: 'รอส่ง', priority: 'กลาง', type: 'outgoing' },
+      { id: 1, title: 'หนังสือขออนุมัติงบประมาณ', from: 'ธรก', date: '2025-10-19', status: 'รับแล้ว', priority: 'ด่วนที่สุด', type: 'incoming', dueDate: '2025-10-25' },
+      { id: 2, title: 'บันทึกข้อความ เรื่อง การประชุม', from: 'กง', date: '2025-10-18', status: 'รอดำเนินการ', priority: 'ด่วนมาก', type: 'incoming', dueDate: '2025-10-22' },
+      { id: 3, title: 'แบบฟอร์มขอลาพักร้อน', from: 'งป', date: '2025-10-17', status: 'เสร็จสิ้น', priority: 'ปกติ', type: 'incoming', dueDate: '2025-10-20' },
+      { id: 4, title: 'หนังสือตอบกลับงบประมาณ', to: 'กสข', date: '2025-10-19', status: 'ส่งแล้ว', priority: 'ปกติ', type: 'outgoing' },
+      { id: 5, title: 'บันทึกข้อความภายใน', to: 'กปซ', date: '2025-10-18', status: 'รอส่ง', priority: 'ด่วนที่สุด', type: 'outgoing' },
     ];
 
     let filtered = mockData;

@@ -17,9 +17,9 @@ function DocumentDetail({ document, onClose, onUpdate }) {
 
   const getPriorityColor = (priority) => {
     switch(priority) {
-      case 'สูง': return 'text-red-500';
-      case 'กลาง': return 'text-orange-500';
-      case 'ต่ำ': return 'text-green-500';
+      case 'ด่วนที่สุด': return 'text-red-500';
+      case 'ด่วนมาก': return 'text-orange-500';
+      case 'ปกติ': return 'text-green-500';
       default: return 'text-gray-500';
     }
   };

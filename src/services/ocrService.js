@@ -1,182 +1,210 @@
-import apiService from './api'
+import Tesseract from 'tesseract.js';
 
-const ocrService = {
-  // Process document with OCR
-  processDocument: async (file) => {
+class OCRService {
+
+  async processImage(imageFile) {
     try {
-      if (!file) {
-        throw new Error('File is required')
-      }
+      console.log('🤖 เริ่มประมวลผล OCR...');
 
-      // Check file size (max 10MB)
-      const maxSize = 10 * 1024 * 1024
-      if (file.size > maxSize) {
-        throw new Error('File size must be less than 10MB')
-      }
+      const imageUrl = URL.createObjectURL(imageFile);
 
-      // Check file type
-      const allowedTypes = ['application/pdf', 'image/jpeg', 'image/png', 'image/jpg']
-      if (!allowedTypes.includes(file.type)) {
-        throw new Error('File type must be PDF, JPG, or PNG')
-      }
+      const result = await Tesseract.recognize(
+        imageUrl,
+        'tha+eng',
+        {
+          logger: (m) => {
+            if (m.status === 'recognizing text') {
+              console.log(`📊 ความคืบหน้า: ${Math.round(m.progress * 100)}%`);
+            }
+          }
+        }
+      );
 
-      const result = await apiService.processOCR(file)
-      return result
-    } catch (error) {
-      console.error('OCR Service Error:', error)
-      throw error
+      const text = result.data.text || "";
+      console.log('📄 Raw OCR Text:', text);
+
+      URL.revokeObjectURL(imageUrl);
+
+      return this.extractStructuredData(text);
+
+    } catch (err) {
+      console.error("❌ OCR Error:", err);
+      throw err;
     }
-  },
+  }
 
-  // Extract text from file
-  extractText: async (file) => {
-    try {
-      const result = await ocrService.processDocument(file)
-      return result.text || ''
-    } catch (error) {
-      console.error('Error extracting text:', error)
-      throw error
-    }
-  },
+  //-------------------------------------------------------------------
+  // 🧠 MAIN STRUCTURING
+  //-------------------------------------------------------------------
 
-  // Extract metadata
-  extractMetadata: async (file) => {
-    try {
-      const result = await ocrService.processDocument(file)
-      return {
-        title: result.title || '',
-        documentNo: result.documentNo || '',
-        date: result.date || '',
-        from: result.from || '',
-        to: result.to || '',
-        subject: result.subject || '',
-        keywords: result.keywords || [],
-        priority: result.priority || 'กลาง',
-        confidence: result.confidence || 0,
-      }
-    } catch (error) {
-      console.error('Error extracting metadata:', error)
-      throw error
-    }
-  },
-
-  // Validate extracted data
-  validateExtractedData: (data) => {
-    const errors = []
-
-    if (!data.title || data.title.trim() === '') {
-      errors.push('Title could not be extracted')
-    }
-
-    if (data.confidence && data.confidence < 0.5) {
-      errors.push('Low confidence in extraction')
-    }
+  extractStructuredData(text) {
+    const cleaned = this.cleanText(text);
 
     return {
-      valid: errors.length === 0,
-      errors,
-      data,
-    }
-  },
+      department: this.extractDepartment(cleaned) || "",
+      documentNo: this.extractDocumentNumber(cleaned) || "",
+      date: this.extractDate(cleaned) || "",
+      subject: this.extractSubject(cleaned) || "",
+      priority: this.analyzePriority(cleaned) || "ปกติ",
+      keywords: this.extractKeywords(cleaned)
+    };
+  }
 
-  // Parse document number
-  parseDocumentNumber: (text) => {
-    // Common Thai document number patterns
+  
+
+  //-------------------------------------------------------------------
+  // 🧼 CLEAN TEXT
+  //-------------------------------------------------------------------
+
+  cleanText(text) {
+    return text
+      .replace(/\r/g, "")
+      .replace(/[^\u0E00-\u0E7Fa-zA-Z0-9/\- .:\n]/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+
+  //-------------------------------------------------------------------
+  // 🏢 ส่วนราชการ
+  // รองรับรูปแบบราชการ เช่น:
+  // ส่วนราชการ กองคลัง กรมการปกครอง
+  // จาก กองกำลัง ...
+  //-------------------------------------------------------------------
+
+  extractDepartment(text) {
     const patterns = [
-      /ลำดับที่\s*[:：]\s*(\S+)/,
-      /เลขที่\s*[:：]\s*(\S+)/,
-      /Doc\s*No\s*[:：]\s*(\S+)/,
-      /(\w+\s*\/\s*\d+)/,
-    ]
+      /ส่วนราชการ[:\s]*([^\n]+?)(?=ที่|วันที่|เรื่อง|เรียน|โทร|$)/,
+      /จาก[:\s]*([^\n]+?)(?=ที่|วันที่|เรื่อง|เรียน|$)/,
+      /(กรม[^\n]+?)(?=ที่|วันที่|เรื่อง|$)/,
+      /(กอง[^\n]+?)(?=ที่|วันที่|เรื่อง|$)/,
+      /(สำนัก[^\n]+?)(?=ที่|วันที่|เรื่อง|$)/,
+      /(ฝ่าย[^\n]+?)(?=ที่|วันที่|เรื่อง|$)/,
+    ];
 
-    for (const pattern of patterns) {
-      const match = text.match(pattern)
-      if (match) return match[1]
+    for (const p of patterns) {
+      const m = text.match(p);
+      if (m) return m[1].trim();
     }
 
-    return null
-  },
+    // fallback ตรวจบรรทัดแรกที่มีคำนี้
+    const line = text.split("\n").find(l =>
+      /(กรม|กอง|สำนัก|ฝ่าย)/.test(l)
+    );
+    return line ? line.trim() : "";
+  }
 
-  // Parse date
-  parseDate: (text) => {
-    const thaiMonths = {
-      'ม.ค.': '01',
-      'ก.พ.': '02',
-      'มี.ค.': '03',
-      'เม.ย.': '04',
-      'พ.ค.': '05',
-      'มิ.ย.': '06',
-      'ก.ค.': '07',
-      'ส.ค.': '08',
-      'ก.ย.': '09',
-      'ต.ค.': '10',
-      'พ.ย.': '11',
-      'ธ.ค.': '12',
+  //-------------------------------------------------------------------
+  // �� เลขที่หนังสือ (ที่...)
+  // ตัวอย่างที่รองรับ:
+  // ที่ ศธ 0201/2568
+  // ที่ กค 123/2567
+  // เลขที่ 112/2568
+  //-------------------------------------------------------------------
+
+  extractDocumentNumber(text) {
+    const patterns = [
+      /ที่[:\s]*([ก-ฮA-Za-z. ]*\d{1,5}\/25\d{2})/,
+      /เลขที่[:\s]*([^\s]+\/25\d{2})/,
+      /\b(\d{2,5}\/25\d{2})\b/
+    ];
+
+    for (const p of patterns) {
+      const m = text.match(p);
+      if (m) return this.convertThaiNumberToArabic(m[1].trim());
     }
+
+    return "";
+  }
+
+  //-------------------------------------------------------------------
+  // 📅 วันที่
+  // รองรับทั้งเต็ม/ย่อ เช่น:
+  // วันที่ 19 ตุลาคม 2568
+  // วันที่ 19/10/2568
+  // 19 ต.ค. 2568
+  //-------------------------------------------------------------------
+
+  extractDate(text) {
+    const MONTHS =
+      "มกราคม|กุมภาพันธ์|มีนาคม|เมษายน|พฤษภาคม|มิถุนายน|" +
+      "กรกฎาคม|สิงหาคม|กันยายน|ตุลาคม|พฤศจิกายน|ธันวาคม|" +
+      "ม.ค.|ก.พ.|มี.ค.|เม.ย.|พ.ค.|มิ.ย.|ก.ค.|ส.ค.|ก.ย.|ต.ค.|พ.ย.|ธ.ค.";
 
     const patterns = [
-      /(\d{1,2})\s*(ม\.ค\.|ก\.พ\.|มี\.ค\.|เม\.ย\.|พ\.ค\.|มิ\.ย\.|ก\.ค\.|ส\.ค\.|ก\.ย\.|ต\.ค\.|พ\.ย\.|ธ\.ค\.)\s*(\d{4})/,
-      /(\d{4})-(\d{2})-(\d{2})/,
-      /(\d{2})\/(\d{2})\/(\d{4})/,
-    ]
+      new RegExp(`วันที่[:\\s]*([๐-๙0-9]{1,2} (${MONTHS}) [๐-๙0-9]{4})`),
+      /วันที่[:\s]*([๐-๙0-9]{1,2}\/[๐-๙0-9]{1,2}\/[๐-๙0-9]{4})/,
+      new RegExp(`([๐-๙0-9]{1,2} (${MONTHS}) [๐-๙0-9]{4})`),
+    ];
 
-    for (const pattern of patterns) {
-      const match = text.match(pattern)
-      if (match) {
-        try {
-          if (match[2]) {
-            const month = thaiMonths[match[2]] || match[2]
-            return `${match[3]}-${month}-${match[1]}`
-          } else {
-            return `${match[3]}-${match[2]}-${match[1]}`
-          }
-        } catch (e) {
-          continue
-        }
-      }
+    for (const p of patterns) {
+      const m = text.match(p);
+      if (m) return this.convertThaiNumberToArabic(m[1]);
     }
 
-    return null
-  },
+    return "";
+  }
 
-  // Analyze document priority
-  analyzePriority: (text) => {
-    const highPriorityKeywords = ['ด่วน', 'ฉุกเฉิน', 'เร่งด่วน', 'urgent', 'critical']
-    const lowPriorityKeywords = ['ข้อมูล', 'สารสนเทศ', 'general', 'info']
+  //-------------------------------------------------------------------
+  // 📝 เรื่อง
+  // รองรับ:
+  // เรื่อง ขอความอนุเคราะห์…
+  // เรื่อง รายงานผลการปฏิบัติงาน…
+  //-------------------------------------------------------------------
 
-    const lowerText = text.toLowerCase()
+  extractSubject(text) {
+    const patterns = [
+      /เรื่อง[:\s]*([^\n]+?)(?=เรียน|ด้วย|สิ่งที่ส่งมาด้วย|$)/,
+      /เรื่อง[:\s]*([\s\S]{5,200})/
+    ];
 
-    if (highPriorityKeywords.some(keyword => lowerText.includes(keyword))) {
-      return 'สูง'
+    for (const p of patterns) {
+      const m = text.match(p);
+      if (m) return m[1].trim().replace(/\s+/g, " ");
     }
 
-    if (lowPriorityKeywords.some(keyword => lowerText.includes(keyword))) {
-      return 'ต่ำ'
-    }
+    return "";
+  }
 
-    return 'กลาง'
-  },
+  //-------------------------------------------------------------------
+  // ⏱️ ความสำคัญ
+  //-------------------------------------------------------------------
 
-  // Extract keywords
-  extractKeywords: (text, limit = 5) => {
-    // Simple keyword extraction (in production, use a proper NLP library)
-    const words = text
-      .split(/[\s,;.!?]+/)
-      .filter(word => word.length > 3)
-      .map(word => word.toLowerCase())
+  analyzePriority(text) {
+    if (/ด่วนที่สุด/.test(text)) return "ด่วนที่สุด";
+    if (/ด่วนมาก/.test(text)) return "ด่วนมาก";
+    if (/ด่วน/.test(text)) return "ด่วน";
+    return "ปกติ";
+  }
 
-    const freq = {}
-    words.forEach(word => {
-      freq[word] = (freq[word] || 0) + 1
-    })
+  //-------------------------------------------------------------------
+  // 🔑 คำสำคัญ (Top 6)
+  //-------------------------------------------------------------------
 
-    const keywords = Object.entries(freq)
+  extractKeywords(text) {
+    const stopWords = ["และ", "หรือ", "ว่า", "ใน", "เป็น", "ที่", "ซึ่ง", "ตาม"];
+    const words = (text.match(/[ก-ฮ]{3,}/g) || [])
+      .filter(w => !stopWords.includes(w));
+
+    const freq = {};
+    words.forEach(w => freq[w] = (freq[w] || 0) + 1);
+
+    return Object.entries(freq)
       .sort((a, b) => b[1] - a[1])
-      .slice(0, limit)
-      .map(entry => entry[0])
+      .slice(0, 6)
+      .map(([w]) => w);
+  }
 
-    return keywords
-  },
+  //-------------------------------------------------------------------
+  // 🔢 แปลงเลขไทยเป็นเลขอารบิก
+  //-------------------------------------------------------------------
+
+  convertThaiNumberToArabic(text) {
+    const map = { '๐': 0,'๑': 1,'๒': 2,'๓': 3,'๔': 4,'๕': 5,'๖': 6,'๗': 7,'๘': 8,'๙': 9 };
+    return text.replace(/[๐-๙]/g, m => map[m]);
+  }
+
 }
 
-export default ocrService
+const ocrService = new OCRService();
+export default ocrService;
+
