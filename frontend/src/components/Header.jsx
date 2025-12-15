@@ -1,4 +1,3 @@
-// src/components/Header.jsx
 import React, { useState } from 'react';
 import { Bell, FileText, Search } from 'lucide-react';
 
@@ -56,14 +55,13 @@ function Header() {
                 <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-white"></div>
               </div>
               <div className="hidden md:block">
-                <p className="text-sm font-semibold text-gray-900"> ณัฐธลภัส  ศรีสง่า</p>
+                <p className="text-sm font-semibold text-gray-900">สมชาย ใจดี</p>
                 <p className="text-xs text-gray-500">ผู้ดูแลระบบ</p>
               </div>
             </div>
           </div>
         </div>
 
-        {/* Notifications Dropdown */}
         {showNotifications && (
           <div className="absolute right-6 top-20 w-96 bg-white/90 backdrop-blur-xl rounded-2xl shadow-2xl border border-white/20 z-20 overflow-hidden">
             <div className="p-5 border-b border-gray-100 bg-gradient-to-r from-blue-50 to-indigo-50">

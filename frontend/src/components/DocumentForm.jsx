@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { X, CheckCircle, Clock, FileText, Camera, Image, Folder, Upload } from 'lucide-react';
-import ocrService from '../services/ocrService';
+import { useOCR } from '../hooks';
 
 function DocumentForm({ onClose, onSubmit }) {
   const [formData, setFormData] = useState({
@@ -8,7 +8,7 @@ function DocumentForm({ onClose, onSubmit }) {
     title: '',
     from: '',
     to: '',
-    priority: 'ปกติ',
+    priority: 'กลาง',
     department: '',
     documentNo: '',
     date: '',
@@ -16,31 +16,15 @@ function DocumentForm({ onClose, onSubmit }) {
     file: null
   });
   const [showFileOptions, setShowFileOptions] = useState(true);
-  const [isProcessingOCR, setIsProcessingOCR] = useState(false);
-  const [ocrComplete, setOcrComplete] = useState(false);
-  const [extractedData, setExtractedData] = useState(null);
-  const [ocrProgress, setOcrProgress] = useState(0);
 
-  const handleFileUpload = async (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      await processFile(file);
-    }
-  };
+  // Use OCR Hook
+  const { processing, progress, result, processFile, reset } = useOCR();
 
-  const processFile = async (file) => {
-    setFormData({ ...formData, file });
-    setShowFileOptions(false);
-    setIsProcessingOCR(true);
-    setOcrProgress(0);
-
-    try {
-      // เรียกใช้ OCR Service จริง
-      const result = await ocrService.processImage(file);
-      
-      setExtractedData(result);
-      setFormData({
-        ...formData,
+  useEffect(() => {
+    if (result) {
+      // อัพเดทฟอร์มด้วยข้อมูล OCR
+      setFormData(prev => ({
+        ...prev,
         title: result.title || result.subject,
         from: result.from || result.department,
         department: result.department,
@@ -48,20 +32,29 @@ function DocumentForm({ onClose, onSubmit }) {
         date: result.date,
         subject: result.subject,
         priority: result.priority,
-        file
-      });
-      setIsProcessingOCR(false);
-      setOcrComplete(true);
-    } catch (error) {
-      console.error('OCR Error:', error);
-      alert('เกิดข้อผิดพลาดในการประมวลผล OCR กรุณาลองใหม่อีกครั้ง');
-      setIsProcessingOCR(false);
-      setShowFileOptions(true);
+      }));
+    }
+  }, [result]);
+
+  const handleFileUpload = async (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      setFormData(prev => ({ ...prev, file }));
+      setShowFileOptions(false);
+      
+      try {
+        await processFile(file);
+      } catch (error) {
+        console.error('OCR Error:', error);
+        alert('เกิดข้อผิดพลาดในการประมวลผล OCR กรุณาลองใหม่อีกครั้ง');
+        setShowFileOptions(true);
+        reset();
+      }
     }
   };
 
   const handleSubmit = () => {
-    onSubmit({ ...formData, extractedData });
+    onSubmit({ ...formData, extractedData: result });
   };
 
   return (
@@ -93,7 +86,7 @@ function DocumentForm({ onClose, onSubmit }) {
           </div>
 
           {/* แสดงข้อมูล OCR ที่สแกนได้ */}
-          {ocrComplete && extractedData && (
+          {result && (
             <div className="border-2 border-green-300 bg-gradient-to-br from-green-50 to-emerald-50 rounded-2xl p-6">
               <div className="flex items-center gap-3 mb-4">
                 <div className="w-12 h-12 bg-green-500 rounded-xl flex items-center justify-center">
@@ -106,41 +99,28 @@ function DocumentForm({ onClose, onSubmit }) {
               </div>
 
               <div className="bg-white rounded-xl p-5 space-y-3">
-                {extractedData.department && (
+                {result.department && (
                   <div className="flex justify-between py-2 border-b">
                     <span className="text-gray-600 font-medium">1. ส่วนราชการ:</span>
-                    <span className="font-bold text-gray-900">{extractedData.department}</span>
+                    <span className="font-bold text-gray-900">{result.department}</span>
                   </div>
                 )}
-                {extractedData.documentNo && (
+                {result.documentNo && (
                   <div className="flex justify-between py-2 border-b">
                     <span className="text-gray-600 font-medium">2. ที่:</span>
-                    <span className="font-bold text-gray-900">{extractedData.documentNo}</span>
+                    <span className="font-bold text-gray-900">{result.documentNo}</span>
                   </div>
                 )}
-                {extractedData.date && (
+                {result.date && (
                   <div className="flex justify-between py-2 border-b">
                     <span className="text-gray-600 font-medium">3. วันที่:</span>
-                    <span className="font-bold text-gray-900">{extractedData.date}</span>
+                    <span className="font-bold text-gray-900">{result.date}</span>
                   </div>
                 )}
-                {extractedData.subject && (
+                {result.subject && (
                   <div className="flex justify-between py-2">
                     <span className="text-gray-600 font-medium">4. เรื่อง:</span>
-                    <span className="font-bold text-gray-900 text-right">{extractedData.subject}</span>
-                  </div>
-                )}
-                
-                {extractedData.keywords && extractedData.keywords.length > 0 && (
-                  <div className="pt-3 border-t">
-                    <p className="text-xs text-gray-600 mb-2">คำสำคัญ:</p>
-                    <div className="flex gap-2 flex-wrap">
-                      {extractedData.keywords.map((keyword, i) => (
-                        <span key={i} className="px-3 py-1 bg-blue-100 text-blue-700 rounded-lg text-xs font-medium">
-                          {keyword}
-                        </span>
-                      ))}
-                    </div>
+                    <span className="font-bold text-gray-900 text-right">{result.subject}</span>
                   </div>
                 )}
               </div>
@@ -158,7 +138,7 @@ function DocumentForm({ onClose, onSubmit }) {
                 placeholder="พิมพ์หัวข้อเอกสาร..."
                 className="w-full px-4 py-3 bg-gray-50 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
               />
-              {ocrComplete && <p className="text-xs text-green-600 mt-2 font-medium">✓ ดึงจาก OCR</p>}
+              {result && <p className="text-xs text-green-600 mt-2 font-medium">✓ ดึงจาก OCR</p>}
             </div>
 
             <div>
@@ -170,7 +150,7 @@ function DocumentForm({ onClose, onSubmit }) {
                 placeholder="หน่วยงาน/บุคคล"
                 className="w-full px-4 py-3 bg-gray-50 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
               />
-              {ocrComplete && <p className="text-xs text-green-600 mt-2 font-medium">✓ ดึงจาก OCR</p>}
+              {result && <p className="text-xs text-green-600 mt-2 font-medium">✓ ดึงจาก OCR</p>}
             </div>
 
             <div>
@@ -180,11 +160,11 @@ function DocumentForm({ onClose, onSubmit }) {
                 onChange={(e) => setFormData({ ...formData, priority: e.target.value })}
                 className="w-full px-4 py-3 bg-gray-50 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
               >
-                <option>ปกติ</option>
-                <option>ด่วนมาก</option>
-                <option>ด่วนที่สุด</option>
+                <option>ต่ำ</option>
+                <option>กลาง</option>
+                <option>สูง</option>
               </select>
-              {ocrComplete && <p className="text-xs text-green-600 mt-2 font-medium">✓ วิเคราะห์อัตโนมัติ</p>}
+              {result && <p className="text-xs text-green-600 mt-2 font-medium">✓ วิเคราะห์อัตโนมัติ</p>}
             </div>
           </div>
 
@@ -192,7 +172,7 @@ function DocumentForm({ onClose, onSubmit }) {
           <div>
             <label className="block text-sm font-semibold text-gray-700 mb-3">อัพโหลดเอกสาร</label>
             
-            {showFileOptions && !isProcessingOCR && !ocrComplete && (
+            {showFileOptions && !processing && !result && (
               <div className="grid grid-cols-3 gap-4">
                 <label className="cursor-pointer">
                   <input type="file" onChange={handleFileUpload} accept=".pdf,.jpg,.jpeg,.png" className="hidden" />
@@ -223,14 +203,18 @@ function DocumentForm({ onClose, onSubmit }) {
               </div>
             )}
 
-            {isProcessingOCR && (
+            {processing && (
               <div className="border-2 border-blue-300 bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl p-12 text-center">
                 <div className="w-16 h-16 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
                 <p className="text-base font-bold text-blue-900 mb-2">🤖 กำลังสแกนเอกสาร...</p>
                 <p className="text-sm text-blue-600 mb-4">กำลังอ่านข้อความจากรูปภาพ</p>
                 <div className="max-w-md mx-auto bg-gray-200 rounded-full h-2">
-                  <div className="bg-blue-600 h-2 rounded-full transition-all duration-300" style={{width: `${ocrProgress}%`}}></div>
+                  <div 
+                    className="bg-blue-600 h-2 rounded-full transition-all duration-300" 
+                    style={{width: `${progress}%`}}
+                  ></div>
                 </div>
+                <p className="text-xs text-gray-600 mt-2">{progress}%</p>
               </div>
             )}
           </div>
@@ -245,10 +229,10 @@ function DocumentForm({ onClose, onSubmit }) {
           </button>
           <button 
             onClick={handleSubmit}
-            disabled={isProcessingOCR}
-            className={`flex-1 px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl hover:shadow-xl hover:shadow-blue-500/30 transition-all font-medium ${isProcessingOCR ? 'opacity-50 cursor-not-allowed' : ''}`}
+            disabled={processing}
+            className={`flex-1 px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl hover:shadow-xl hover:shadow-blue-500/30 transition-all font-medium ${processing ? 'opacity-50 cursor-not-allowed' : ''}`}
           >
-            {isProcessingOCR ? 'กำลังประมวลผล...' : 'บันทึกเอกสาร'}
+            {processing ? 'กำลังประมวลผล...' : 'บันทึกเอกสาร'}
           </button>
         </div>
       </div>
