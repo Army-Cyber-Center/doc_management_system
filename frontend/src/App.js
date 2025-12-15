@@ -22,6 +22,7 @@ function App() {
 
   const { stats, fetchStats } = useStats();
 
+
   const handleDocumentCreate = async (documentData) => {
     try {
       await createDocument(documentData);
@@ -77,6 +78,7 @@ function App() {
     },
   ];
 
+  
   if (!isLoggedIn) {
     return (
       <LoginSystem onLoginSuccess={() => setIsLoggedIn(true)} />

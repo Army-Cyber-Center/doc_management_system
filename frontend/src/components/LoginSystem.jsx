@@ -1,62 +1,79 @@
 import React, { useState } from 'react';
 import { Lock, Mail, Eye, EyeOff, AlertCircle, CheckCircle, LogIn, UserPlus } from 'lucide-react';
 
-export default function LoginSystem() {
+export default function LoginSystem({ onLoginSuccess }) {
   const [isLogin, setIsLogin] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState(null);
-  
-  // Form states
+
   const [formData, setFormData] = useState({
-  username: '',
-  password: '',
-  full_name: '',
-  id_army: '',
-  role: 'staff'
+    username: '',
+    password: '',
+    id_army: '',
+    role: 'staff'
   });
 
-  // API Configuration
   const API_URL = process.env.REACT_APP_API_URL;
 
   const handleInputChange = (e) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value
-    });
+    setFormData({ ...formData, [e.target.name]: e.target.value });
     setMessage(null);
   };
 
-const handleLogin = async () => {
+  const handleLogin = async () => {
   setLoading(true);
   setMessage(null);
 
+  if (!formData.username || !formData.password) {
+    setMessage({ type: 'error', text: 'กรุณากรอกข้อมูลให้ครบถ้วน' });
+    setLoading(false);
+    return;
+  }
+
   try {
-    const response = await fetch(`${API_URL}/auth/login`, {
+    // Prepare form data
+    const formBody = new URLSearchParams();
+    formBody.append('username', formData.username);
+    formBody.append('password', formData.password);
+
+    // Request token
+    const tokenResponse = await fetch(`${API_URL}/auth/token`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        username: formData.username,
-        password: formData.password
-      })
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: formBody
     });
 
-    const data = await response.json();
+    const tokenData = await tokenResponse.json();
 
-    if (response.ok) {
-      setMessage({ type: 'success', text: 'เข้าสู่ระบบสำเร็จ!' });
-      localStorage.setItem('token', data.token);
-      localStorage.setItem('user', JSON.stringify(data.user));
-    } else {
-      setMessage({ type: 'error', text: data.error || 'ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง' });
+    if (!tokenResponse.ok) {
+      throw new Error(tokenData.detail || 'ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง');
     }
 
+    const token = tokenData.access_token;
+    localStorage.setItem('token', token);
+
+    // Fetch user info
+    const userResponse = await fetch(`${API_URL}/auth/me`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+
+    const userData = await userResponse.json();
+    localStorage.setItem('user', JSON.stringify(userData));
+
+    setMessage({ type: 'success', text: 'เข้าสู่ระบบสำเร็จ!' });
+
+
+    if (onLoginSuccess) onLoginSuccess(); // เรียก callback
+  
+
   } catch (error) {
-    setMessage({ type: 'error', text: 'เชื่อมต่อ Backend ไม่ได้' });
+    setMessage({ type: 'error', text: error.message || 'เชื่อมต่อ Backend ไม่ได้' });
   } finally {
     setLoading(false);
   }
 };
+
 
 const handleRegister = async () => {
   setLoading(true);
@@ -71,38 +88,102 @@ const handleRegister = async () => {
   try {
     const response = await fetch(`${API_URL}/auth/register`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+      },
       body: JSON.stringify({
         username: formData.username,
         password: formData.password,
         id_army: formData.id_army,
-        role: formData.role   // default = staff
-      })
+        role: formData.role || 'user',
+      }),
     });
 
-    const data = await response.json();
+    if (formData.username.length < 3) {
+  setMessage({ type: 'error', text: 'ชื่อผู้ใช้ต้องมีอย่างน้อย 3 ตัวอักษร' });
+  return;
+}
 
-    if (response.ok) {
-      setMessage({ type: 'success', text: 'สมัครสมาชิกสำเร็จ!' });
-    } else {
-      setMessage({ type: 'error', text: data.error || 'สมัครสมาชิกไม่สำเร็จ' });
+if (formData.password.length < 8) {
+  setMessage({ type: 'error', text: 'รหัสผ่านต้องมีอย่างน้อย 8 ตัวอักษร' });
+  return;
+}
+
+   const data = await response.json();
+    console.log('Registration response:', data); // <-- see exact error
+
+    if (!response.ok) {
+      throw new Error(data.error || 'สมัครสมาชิกไม่สำเร็จ');
     }
 
+    setMessage({
+      type: 'success',
+      text: 'สมัครสมาชิกสำเร็จ! กรุณาเข้าสู่ระบบ',
+    });
+
+    // reset form
+    setFormData({
+      username: '',
+      password: '',
+      id_army: '',
+      role: 'staff',
+    });
+
+    setIsLogin(true);
+
   } catch (error) {
-    setMessage({ type: 'error', text: 'เชื่อมต่อ Backend ไม่ได้' });
+    setMessage({
+      type: 'error',
+      text: error.message || 'เชื่อมต่อ Backend ไม่ได้',
+    });
   } finally {
     setLoading(false);
+  }
+}
+const fetchUserProfile = async () => {
+  try {
+    const token = localStorage.getItem('access_token'); // หรือ 'token' ถ้าใช้ชื่ออื่น
+    if (!token) {
+      console.log('ไม่มี token');
+      return;
+    }
+
+    const response = await fetch(`${API_URL}/api/v1/auth/me`, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error('ไม่สามารถดึงข้อมูลผู้ใช้ได้');
+    }
+
+    const data = await response.json();
+    console.log('ข้อมูลผู้ใช้:', data);
+
+    // ตัวอย่าง: เก็บใน state
+    // setUser(data);
+    await handleLogin(); // login ก่อน
+    fetchUserProfile();  // ดึงข้อมูล user
+
+  } catch (error) {
+    console.error('Error fetching user profile:', error);
   }
 };
 
   const demoLogin = async (role) => {
     const demoAccounts = {
-      admin: { email: 'admin@company.com', password: 'admin123' },
-      manager: { email: 'manager@company.com', password: 'manager123' },
-      staff: { email: 'staff@company.com', password: 'staff123' }
+      admin: { username: 'admin', password: 'admin123' },
+      manager: { username: 'manager', password: 'manager123' },
+      staff: { username: 'staff', password: 'staff123' }
     };
 
-    setFormData(demoAccounts[role]);
+   setFormData({
+      ...formData,
+      ...demoAccounts[role]
+    });
     setMessage({ type: 'info', text: `กรอกข้อมูล ${role} ให้แล้ว คลิก "เข้าสู่ระบบ" เพื่อทดสอบ` });
   };
 
