@@ -1,22 +1,18 @@
-const ocrService = require('../services/ocrService');
+const db = require('../config/db'); // การเชื่อมต่อ DB ของคุณ
 
-// Process OCR from uploaded file
-exports.processFile = async (req, res) => {
+const getOcrResults = async (req, res) => {
   try {
-    if (!req.file) {
-      return res.status(400).json({ message: 'No file uploaded' });
-    }
+    // ดึงข้อมูลโดยตรงจากตาราง ocr_results
+    const [rows] = await db.execute(
+      'SELECT id, extracted_text, created_at FROM ocr_results ORDER BY created_at DESC'
+    );
 
-    console.log('📁 Processing file:', req.file.filename);
-
-    const result = await ocrService.processImage(req.file.path);
-
-    res.json({
-      message: 'OCR processing completed',
-      data: result
-    });
+    // ส่งข้อมูลกลับไป ( rows จะเป็น Array ของ Object ที่มีฟิลด์ extracted_text )
+    res.status(200).json(rows);
   } catch (error) {
-    console.error('❌ OCR Error:', error);
-    res.status(500).json({ message: 'Error processing OCR', error: error.message });
+    console.error(error);
+    res.status(500).json({ message: "Error fetching data" });
   }
 };
+
+module.exports = { getOcrResults };

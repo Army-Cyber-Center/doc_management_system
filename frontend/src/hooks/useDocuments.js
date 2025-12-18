@@ -1,68 +1,42 @@
-import { useState, useEffect } from 'react';
-import { documentApi } from '../api';
+import { useState, useEffect, useCallback } from 'react';
+import documentApi from '../api/documentApi';
+import { useAuth } from '../context/AuthContext';
 
-export const useDocuments = (filters = {}) => {
+export const useDocuments = ({ type }) => {
+  const { token } = useAuth();
   const [documents, setDocuments] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
+  const [loading, setLoading] = useState(true);
 
-  const fetchDocuments = async () => {
+  const fetchDocuments = useCallback(async () => {
+    if (!token) return;
+    setLoading(true);
     try {
-      setLoading(true);
-      setError(null);
-      const data = await documentApi.getAll(filters);
+      const data = await documentApi.fetchDocuments({ type }, token);
       setDocuments(data);
-    } catch (err) {
-      setError(err.message);
-      console.error('Error fetching documents:', err);
+    } catch (error) {
+      console.error('Fetch documents error:', error);
     } finally {
       setLoading(false);
     }
+  }, [token, type]);
+
+  const createDocument = async (docData) => {
+    if (!token) throw new Error('No token');
+    const newDoc = await documentApi.uploadDocument(docData, token);
+    await fetchDocuments();
+    return newDoc;
+  };
+
+  const updateDocument = async (id, updates) => {
+    if (!token) throw new Error('No token');
+    const updated = await documentApi.updateDocument(id, updates, token);
+    await fetchDocuments();
+    return updated;
   };
 
   useEffect(() => {
     fetchDocuments();
-  }, [JSON.stringify(filters)]);
+  }, [fetchDocuments]);
 
-  const createDocument = async (documentData) => {
-    try {
-      const result = await documentApi.create(documentData);
-      await fetchDocuments(); // Refresh list
-      return result;
-    } catch (err) {
-      setError(err.message);
-      throw err;
-    }
-  };
-
-  const updateDocument = async (id, updates) => {
-    try {
-      const result = await documentApi.update(id, updates);
-      await fetchDocuments(); // Refresh list
-      return result;
-    } catch (err) {
-      setError(err.message);
-      throw err;
-    }
-  };
-
-  const deleteDocument = async (id) => {
-    try {
-      await documentApi.delete(id);
-      await fetchDocuments(); // Refresh list
-    } catch (err) {
-      setError(err.message);
-      throw err;
-    }
-  };
-
-  return {
-    documents,
-    loading,
-    error,
-    fetchDocuments,
-    createDocument,
-    updateDocument,
-    deleteDocument
-  };
+  return { documents, loading, createDocument, updateDocument, fetchDocuments };
 };

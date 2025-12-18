@@ -1,4 +1,3 @@
-// src/components/DocumentDetail.jsx
 import React from 'react';
 import { X, User, Calendar, Clock, FileText, Download, Edit, TrendingUp } from 'lucide-react';
 
@@ -18,6 +17,7 @@ function DocumentDetail({ document, onClose, onUpdate }) {
   const getPriorityColor = (priority) => {
     switch(priority) {
       case 'ด่วนที่สุด': return 'text-red-500';
+      case 'ด่วนมาก': return 'text-red-500';
       case 'ด่วนมาก': return 'text-orange-500';
       case 'ปกติ': return 'text-green-500';
       default: return 'text-gray-500';

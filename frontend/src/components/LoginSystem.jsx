@@ -21,23 +21,15 @@ export default function LoginSystem({ onLoginSuccess }) {
     setMessage(null);
   };
 
-  const handleLogin = async () => {
+const handleLogin = async () => {
   setLoading(true);
   setMessage(null);
 
-  if (!formData.username || !formData.password) {
-    setMessage({ type: 'error', text: 'กรุณากรอกข้อมูลให้ครบถ้วน' });
-    setLoading(false);
-    return;
-  }
-
   try {
-    // Prepare form data
     const formBody = new URLSearchParams();
     formBody.append('username', formData.username);
     formBody.append('password', formData.password);
 
-    // Request token
     const tokenResponse = await fetch(`${API_URL}/auth/token`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -51,29 +43,28 @@ export default function LoginSystem({ onLoginSuccess }) {
     }
 
     const token = tokenData.access_token;
-    localStorage.setItem('token', token);
 
-    // Fetch user info
+    // ✅ ใช้ key เดียวกับ App.js
+    localStorage.setItem('access_token', token);
+
+    // (optional) fetch user
     const userResponse = await fetch(`${API_URL}/auth/me`, {
-      headers: { 'Authorization': `Bearer ${token}` }
+      headers: { Authorization: `Bearer ${token}` }
     });
-
     const userData = await userResponse.json();
     localStorage.setItem('user', JSON.stringify(userData));
 
     setMessage({ type: 'success', text: 'เข้าสู่ระบบสำเร็จ!' });
 
-
-    if (onLoginSuccess) onLoginSuccess(); // เรียก callback
-  
+    // ✅ สำคัญที่สุด
+    onLoginSuccess(token);
 
   } catch (error) {
-    setMessage({ type: 'error', text: error.message || 'เชื่อมต่อ Backend ไม่ได้' });
+    setMessage({ type: 'error', text: error.message });
   } finally {
     setLoading(false);
   }
 };
-
 
 const handleRegister = async () => {
   setLoading(true);
@@ -172,20 +163,6 @@ const fetchUserProfile = async () => {
     console.error('Error fetching user profile:', error);
   }
 };
-
-  const demoLogin = async (role) => {
-    const demoAccounts = {
-      admin: { username: 'admin', password: 'admin123' },
-      manager: { username: 'manager', password: 'manager123' },
-      staff: { username: 'staff', password: 'staff123' }
-    };
-
-   setFormData({
-      ...formData,
-      ...demoAccounts[role]
-    });
-    setMessage({ type: 'info', text: `กรอกข้อมูล ${role} ให้แล้ว คลิก "เข้าสู่ระบบ" เพื่อทดสอบ` });
-  };
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -375,34 +352,6 @@ const fetchUserProfile = async () => {
                     'เข้าสู่ระบบ'
                   )}
                 </button>
-
-                {/* Demo Accounts */}
-                <div className="pt-6 border-t border-gray-200">
-                  <p className="text-xs text-gray-500 text-center mb-3">ทดสอบด้วยบัญชีตัวอย่าง</p>
-                  <div className="flex gap-2">
-                    <button
-                      type="button"
-                      onClick={() => demoLogin('admin')}
-                      className="flex-1 py-2 text-xs bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-all font-medium"
-                    >
-                      Admin
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => demoLogin('manager')}
-                      className="flex-1 py-2 text-xs bg-orange-50 text-orange-600 rounded-lg hover:bg-orange-100 transition-all font-medium"
-                    >
-                      Manager
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => demoLogin('staff')}
-                      className="flex-1 py-2 text-xs bg-green-50 text-green-600 rounded-lg hover:bg-green-100 transition-all font-medium"
-                    >
-                      Staff
-                    </button>
-                  </div>
-                </div>
               </div>
             ) : (
               /* Register Form */
@@ -501,13 +450,13 @@ const fetchUserProfile = async () => {
             )}
 
             {/* Backend Connection Info */}
-            <div className="mt-6 p-4 bg-blue-50 border-2 border-blue-200 rounded-xl">
+            {/* <div className="mt-6 p-4 bg-blue-50 border-2 border-blue-200 rounded-xl">
               <p className="text-xs text-blue-800 font-medium mb-2">🔗 Backend API Endpoint:</p>
               <code className="text-xs text-blue-600 bg-white px-2 py-1 rounded">{API_URL}</code>
               <p className="text-xs text-blue-700 mt-2">
                 ⚠️ ตรวจสอบว่า Backend รันที่ <strong>localhost:8081</strong>
               </p>
-            </div>
+            </div> */}
           </div>
         </div>
       </div>
