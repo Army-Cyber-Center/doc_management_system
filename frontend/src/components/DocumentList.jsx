@@ -34,6 +34,7 @@ function DocumentList({
   });
 
   // ✅ Fetch all OCR documents on component mount or when activeTab changes
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     fetchAllOCRDocuments();
   }, [activeTab]);

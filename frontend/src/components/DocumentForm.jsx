@@ -1,11 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { X, CheckCircle, FileText, Camera, Image, Folder } from 'lucide-react';
+import { X, CheckCircle, Camera, Image, Folder } from 'lucide-react';
 import Cropper from 'react-easy-crop';
 import Modal from 'react-modal';
 import getCroppedImg from '../utils/cropImage';
 import { useTyphoonOCR } from '../hooks/useTyphoonOCR';
 
-const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 // ✅ Parse OCR extracted_text into structured fields
 const parseOCRText = (extractedText) => {
   if (!extractedText) return {};
@@ -21,11 +20,11 @@ const parseOCRText = (extractedText) => {
 
   const text = extractedText;
 
-  const datePattern = /วันที่\s*[:\s]*([0-9]{1,2}[\/\-][0-9]{1,2}[\/\-][0-9]{2,4}|[\d\/\-]+)/gi;
+  const datePattern = /วันที่\s*[:\s]*([0-9]{1,2}[/\-][0-9]{1,2}[/\-][0-9]{2,4}|[\d/\-]+)/gi;
   const dateMatch = text.match(datePattern);
   if (dateMatch) result.date = dateMatch[0].replace(/วันที่\s*[:\s]*/gi, '').trim();
 
-  const numberPattern = /(?:เลขที่|ที่)\s*[:\s]*([A-Z0-9\/\-.\s]+?)(?:\n|$)/gi;
+  const numberPattern = /(?:เลขที่|ที่)\s*[:\s]*([A-Z0-9/\-.\s]+?)(?:\n|$)/gi;
   const numberMatch = text.match(numberPattern);
   if (numberMatch) {
     result.documentNo = numberMatch[0].replace(/(?:เลขที่|ที่)\s*[:\s]*/gi, '').trim().split('\n')[0];
@@ -50,30 +49,46 @@ const parseOCRText = (extractedText) => {
   return result;
 };
 
+// ✅ แก้ไข: เพิ่ม onProgress callback + เพิ่ม timeout
 const waitForDocument = async (
   getDocument,
   id,
   {
-    interval = 3000, // ยิงซ้ำทุก 3 วิ
-    timeout = 200000  // รอสูงสุด 20 วิ
-  } = {}
+    interval = 3000,  // ยิงซ้ำทุก 3 วิ
+    timeout = 240000  // ✅ เพิ่มเป็น 240 วิ (4 นาที)
+  } = {},
+  onProgress // ✅ เพิ่ม callback
 ) => {
   const start = Date.now();
+  let attempts = 0;
+  const maxAttempts = Math.floor(timeout / interval);
 
   while (Date.now() - start < timeout) {
+    attempts++;
+    
+    // ✅ อัพเดต progress (0-90%)
+    if (onProgress) {
+      const progressPercent = Math.min((attempts / maxAttempts) * 90, 90);
+      onProgress(progressPercent);
+    }
+
     try {
+      console.log(`⏳ กำลังรอ OCR... (${attempts}/${maxAttempts})`);
       const data = await getDocument(id);
 
       if (data?.ocr_data?.extracted_text) {
-        return data; // ✅ DB พร้อม
+        console.log('✅ OCR เสร็จแล้ว!');
+        if (onProgress) onProgress(100);
+        return data;
       }
     } catch (err) {
+      console.warn('⚠️ ยังไม่พร้อม, รอต่อ...', err.message);
     }
 
     await new Promise(resolve => setTimeout(resolve, interval));
   }
 
-  throw new Error('Timeout: OCR data not ready');
+  throw new Error('⏱️ ระบบใช้เวลานานเกินไป (เกิน 4 นาที) กรุณาลองใหม่');
 };
 
 function DocumentForm({ onClose, onSubmit }) {
@@ -91,8 +106,6 @@ function DocumentForm({ onClose, onSubmit }) {
   });
 
   const [showFileOptions, setShowFileOptions] = useState(true);
-  const [previewUrl, setPreviewUrl] = useState(null);
-  const [fileType, setFileType] = useState(null);
   const [documentDetails, setDocumentDetails] = useState(null);
   const [loadingDetails, setLoadingDetails] = useState(false);
 
@@ -104,352 +117,509 @@ function DocumentForm({ onClose, onSubmit }) {
   const [zoom, setZoom] = useState(1);
   const [croppedAreaPixels, setCroppedAreaPixels] = useState(null);
   const [tempImage, setTempImage] = useState(null);
-  const [aspect, setAspect] = useState(1);
-  const [rotation, setRotation] = useState(0);
   const [progress, setProgress] = useState(0);
-  // ✅ แก้ปัญหา Infinite Loop โดยใช้เงื่อนไขตรวจสอบผลลัพธ์เดิม
-useEffect(() => {
-  const fetchFullDocumentDetails = async () => {
-    if (!result?.id || documentDetails?.ocr_id === result.id) return;
 
-    setLoadingDetails(true);
-    setProgress(0);
+  // ✅ แก้ไข useEffect
+  useEffect(() => {
+    const fetchFullDocumentDetails = async () => {
+      if (!result?.id || documentDetails?.ocr_id === result.id) return;
 
-    const progressInterval = setInterval(() => {
-      setProgress(prev => (prev < 90 ? prev + 5 : prev));
-    }, 500);
-
-    try {
-      // ✅ รอจน DB พร้อม
-      const data = await waitForDocument(getDocument, result.id, {
-        interval: 3000,
-        timeout: 200000
-      });
-
-      clearInterval(progressInterval);
-      setProgress(1000);
-
-      const rawText = data.ocr_data.extracted_text;
-      const parsed = parseOCRText(rawText);
-
-      setDocumentDetails({
-        ...parsed,
-        ocr_id: result.id,
-        full_raw_text: rawText
-      });
-
-    } catch (err) {
-      console.error(err);
-      alert('ระบบใช้เวลานานเกินไป กรุณาลองใหม่');
-    } finally {
-      clearInterval(progressInterval);
-      setLoadingDetails(false);
+      setLoadingDetails(true);
       setProgress(0);
-    }
-  };
 
-  fetchFullDocumentDetails();
-}, [result, getDocument, documentDetails]);
+      try {
+        console.log('🚀 เริ่มต้นการประมวลผล OCR...');
+        
+        // ✅ รอจน DB พร้อม + ส่ง progress callback
+        const data = await waitForDocument(
+          getDocument, 
+          result.id, 
+          {
+            interval: 3000,   // 3 วิ
+            timeout: 240000   // 4 นาที
+          },
+          (progressPercent) => {
+            // ✅ อัพเดต progress bar real-time
+            setProgress(progressPercent);
+            console.log(`📊 ความคืบหน้า: ${progressPercent.toFixed(0)}%`);
+          }
+        );
 
-  // ✅ อัปเดตฟอร์มอัตโนมัติเพียงครั้งเดียวเมื่อได้ข้อมูล
+        setProgress(100);
+        console.log('✅ ดึงข้อมูลสำเร็จ!');
+
+        const rawText = data.ocr_data.extracted_text;
+        const parsed = parseOCRText(rawText);
+
+        setDocumentDetails({
+          ...parsed,
+          ocr_id: result.id,
+          full_raw_text: rawText
+        });
+
+      } catch (err) {
+        console.error('❌ เกิดข้อผิดพลาด:', err);
+        setProgress(0);
+        alert('⚠️ ระบบใช้เวลานานเกินไป (เกิน 4 นาที)\n\nกรุณา:\n1. ตรวจสอบขนาดไฟล์ (ควร < 5MB)\n2. ลองอัพโหลดใหม่อีกครั้ง\n3. ติดต่อผู้ดูแลระบบหากปัญหายังคงอยู่');
+      } finally {
+        setLoadingDetails(false);
+      }
+    };
+
+    fetchFullDocumentDetails();
+  }, [result, documentDetails, getDocument]);
+
+  // ✅ Auto-fill form when documentDetails available
   useEffect(() => {
     if (documentDetails) {
       setFormData(prev => ({
         ...prev,
-        title: documentDetails.subject || documentDetails.title || prev.title,
-        from: documentDetails.from_department || documentDetails.from || prev.from,
         department: documentDetails.department || prev.department,
-        documentNo: documentDetails.document_number || documentDetails.documentNo || prev.documentNo,
-        date: documentDetails.document_date || documentDetails.date || prev.date,
+        documentNo: documentDetails.documentNo || prev.documentNo,
+        date: documentDetails.date || prev.date,
+        subject: documentDetails.subject || prev.subject,
+        from: documentDetails.from || prev.from,
         priority: documentDetails.priority || prev.priority
       }));
     }
   }, [documentDetails]);
 
-  const handleFileUpload = async (e) => {
-    const file = e.target.files[0];
+  const handleFileSelect = async (file) => {
     if (!file) return;
 
-    if (!file.type.startsWith('image/') && file.type !== 'application/pdf') {
-      alert('รองรับเฉพาะไฟล์ PDF หรือรูปภาพเท่านั้น (JPG, PNG)');
-      return;
-    }
-
-    setFormData(prev => ({ ...prev, file }));
+    setFormData(prev => ({ ...prev, file, title: file.name }));
     setShowFileOptions(false);
 
-    if (file.type.startsWith('image/')) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setTempImage(reader.result);
-        setCropModalOpen(true);
-      };
-      reader.readAsDataURL(file);
-      setFileType('image');
-      setPreviewUrl(URL.createObjectURL(file));
-    } else {
-      setFileType('pdf');
-      setPreviewUrl(null);
-      try {
-        await processFile(file, {
-          title: file.name,
-          document_type: formData.type
-        });
-      } catch (err) {
-        alert('เกิดข้อผิดพลาด: ' + err.message);
-        reset();
-        setShowFileOptions(true);
-      }
+    // ✅ Upload & OCR
+    try {
+      await processFile(file, {
+        title: file.name,
+        document_type: formData.type
+      });
+    } catch (err) {
+      alert('อัพโหลดไฟล์ไม่สำเร็จ: ' + err.message);
+      reset();
     }
   };
 
-  const handleSubmit = async () => {
-    if (!formData.file) return alert('กรุณาแนบไฟล์เอกสาร');
+  const handleCameraCapture = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
 
-    const token = localStorage.getItem('access_token');
-    const form = new FormData();
-    form.append('file', formData.file);
-    form.append('title', formData.title);
-    form.append('document_type', formData.type);
-    form.append('from_department', formData.from);
-    form.append('priority', formData.priority);
-    form.append('document_number', formData.documentNo || '');
-    form.append('document_date', formData.date || '');
+    const reader = new FileReader();
+    reader.onload = () => {
+      setTempImage(reader.result);
+      setCropModalOpen(true);
+    };
+    reader.readAsDataURL(file);
+  };
 
-    if (result?.id) form.append('ocr_id', result.id);
+  const handleCropComplete = async () => {
+    try {
+      const croppedBlob = await getCroppedImg(tempImage, croppedAreaPixels, 0);
+      const croppedFile = new File([croppedBlob], 'cropped-image.jpg', { type: 'image/jpeg' });
+      
+      setCropModalOpen(false);
+      setTempImage(null);
+      
+      await handleFileSelect(croppedFile);
+    } catch (err) {
+      console.error(err);
+      alert('Crop ภาพไม่สำเร็จ');
+    }
+  };
+
+  const handleInputChange = (e) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({ ...prev, [name]: value }));
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+
+    if (!formData.file) {
+      alert('กรุณาเลือกไฟล์');
+      return;
+    }
 
     try {
-      const apiUrl = `${process.env.REACT_APP_API_URL}/documents/upload`;
-      const response = await fetch(apiUrl, {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${token}` },
-        body: form
-      });
+      const submitData = new FormData();
+      submitData.append('file', formData.file);
+      submitData.append('title', formData.title);
+      submitData.append('type', formData.type);
+      submitData.append('from', formData.from);
+      submitData.append('to', formData.to);
+      submitData.append('priority', formData.priority);
+      submitData.append('department', formData.department);
+      submitData.append('documentNo', formData.documentNo);
+      submitData.append('date', formData.date);
+      submitData.append('subject', formData.subject);
 
-      if (!response.ok) throw new Error('บันทึกไม่สำเร็จ');
-
-      alert('บันทึกเอกสารสำเร็จ');
-      if (onSubmit) onSubmit();
+      await onSubmit(submitData);
       onClose();
     } catch (err) {
-      alert(err.message);
+      alert('บันทึกข้อมูลไม่สำเร็จ: ' + err.message);
     }
   };
 
   return (
-    <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-30 p-4 text-gray-800">
-      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-hidden flex flex-col">
-        {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-gray-100 bg-gradient-to-r from-blue-50 to-indigo-50 shrink-0">
-          <div>
-            <h2 className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">เพิ่มเอกสารใหม่</h2>
-            <p className="text-sm text-gray-500 mt-1">กรอกข้อมูลหรือใช้ระบบสแกนอัตโนมัติ</p>
-          </div>
-          <button onClick={onClose} className="p-2 hover:bg-white rounded-xl transition-all"><X className="w-6 h-6" /></button>
-        </div>
-
-        {/* Body */}
-        <div className="p-6 space-y-6 overflow-y-auto flex-grow">
-          {/* ประเภทเอกสาร */}
-          <div>
-            <label className="block text-sm font-bold text-gray-700 mb-2">ประเภทเอกสาร</label>
-            <select
-              value={formData.type}
-              onChange={(e) => setFormData({ ...formData, type: e.target.value })}
-              className="w-full px-4 py-3 bg-gray-50 border-2 border-gray-200 rounded-xl outline-none"
+    <>
+      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+        <div className="bg-white rounded-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto shadow-2xl">
+          {/* Header */}
+          <div className="sticky top-0 bg-gradient-to-r from-blue-600 to-indigo-600 text-white p-6 flex justify-between items-center rounded-t-2xl">
+            <h2 className="text-2xl font-bold">เพิ่มเอกสารใหม่</h2>
+            <button
+              onClick={onClose}
+              className="p-2 hover:bg-white/20 rounded-lg transition-colors"
             >
-              <option value="incoming">รับเข้า</option>
-              <option value="outgoing">ส่งออก</option>
-            </select>
+              <X className="w-6 h-6" />
+            </button>
           </div>
 
-          {/* Processing State */}
-          {processing && (
-            <div className="p-8 text-center border-2 border-dashed border-blue-200 rounded-2xl bg-blue-50/50">
-              <div className="animate-spin w-10 h-10 border-4 border-blue-600 border-t-transparent rounded-full mx-auto mb-4"></div>
-              <p className="font-bold text-blue-800">กำลังใช้ AI วิเคราะห์ข้อมูลเอกสาร...</p>
-            </div>
-          )}
-          {loadingDetails && (
-            <div className="border-2 border-dashed border-indigo-200 rounded-2xl p-6 bg-indigo-50">
-              <p className="font-bold text-indigo-700 mb-3 text-center">
-                ⏳ กรุณารอสักครู่ ระบบกำลังประมวลผลข้อมูลเอกสาร
-                ระบบกำลังประมวลผลเอกสาร
-                อาจใช้เวลาประมาณ 1–2 นาที
-                กรุณาอย่าปิดหน้านี้
-              </p>
+          <div className="p-6">
+            {/* File Upload Options */}
+            {showFileOptions && !processing && (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                <label className="cursor-pointer group">
+                  <input
+                    type="file"
+                    accept="image/*"
+                    capture="environment"
+                    onChange={handleCameraCapture}
+                    className="hidden"
+                  />
+                  <div className="border-2 border-dashed border-gray-300 rounded-xl p-8 text-center hover:border-blue-500 hover:bg-blue-50 transition-all group-hover:scale-105">
+                    <Camera className="w-12 h-12 mx-auto mb-3 text-gray-400 group-hover:text-blue-500" />
+                    <p className="font-semibold text-gray-700">ถ่ายรูป</p>
+                    <p className="text-sm text-gray-500">เปิดกล้องถ่ายเอกสาร</p>
+                  </div>
+                </label>
 
-              <div className="w-full bg-indigo-100 rounded-full h-3 overflow-hidden">
-                <div
-                  className="h-3 bg-gradient-to-r from-indigo-500 to-blue-600 transition-all duration-300"
-                  style={{ width: `${progress}%` }}
-                />
+                <label className="cursor-pointer group">
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => handleFileSelect(e.target.files?.[0])}
+                    className="hidden"
+                  />
+                  <div className="border-2 border-dashed border-gray-300 rounded-xl p-8 text-center hover:border-blue-500 hover:bg-blue-50 transition-all group-hover:scale-105">
+                    <Image className="w-12 h-12 mx-auto mb-3 text-gray-400 group-hover:text-blue-500" />
+                    <p className="font-semibold text-gray-700">เลือกรูปภาพ</p>
+                    <p className="text-sm text-gray-500">จากแกลเลอรี่</p>
+                  </div>
+                </label>
+
+                <label className="cursor-pointer group">
+                  <input
+                    type="file"
+                    accept=".pdf,.doc,.docx"
+                    onChange={(e) => handleFileSelect(e.target.files?.[0])}
+                    className="hidden"
+                  />
+                  <div className="border-2 border-dashed border-gray-300 rounded-xl p-8 text-center hover:border-blue-500 hover:bg-blue-50 transition-all group-hover:scale-105">
+                    <Folder className="w-12 h-12 mx-auto mb-3 text-gray-400 group-hover:text-blue-500" />
+                    <p className="font-semibold text-gray-700">เลือกไฟล์</p>
+                    <p className="text-sm text-gray-500">PDF, Word</p>
+                  </div>
+                </label>
               </div>
+            )}
 
-              <p className="text-xs text-center text-indigo-600 mt-2">
-                {progress}% กำลังประมวลผล
-              </p>
-            </div>
-          )}
-          {/* OCR Result Card */}
-          {documentDetails && !processing && (
-            <div className="border-2 border-blue-300 bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl p-6 shadow-sm">
-              <div className="flex items-center gap-3 mb-4">
-                <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center shadow-lg shadow-blue-200">
-                  <CheckCircle className="w-6 h-6 text-white" />
+            {/* Processing Indicator */}
+            {processing && (
+              <div className="bg-blue-50 border-2 border-blue-200 rounded-xl p-6 mb-6">
+                <div className="flex items-center gap-4">
+                  <div className="animate-spin rounded-full h-10 w-10 border-4 border-blue-500 border-t-transparent"></div>
+                  <div>
+                    <p className="font-semibold text-blue-900">กำลังอัพโหลดไฟล์...</p>
+                    <p className="text-sm text-blue-700">กรุณารอสักครู่</p>
+                  </div>
                 </div>
+              </div>
+            )}
+
+            {/* Form */}
+            {formData.file && !processing && (
+              <form onSubmit={handleSubmit} className="space-y-6">
+                {/* Document Type */}
                 <div>
-                  <p className="font-bold text-blue-900 text-lg">สแกนข้อมูลสำเร็จ ✨</p>
-                  <p className="text-xs text-blue-600">ระบบสกัดข้อความจากเอกสารของคุณแล้ว</p>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                    ประเภทเอกสาร
+                  </label>
+                  <select
+                    name="type"
+                    value={formData.type}
+                    onChange={handleInputChange}
+                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all"
+                  >
+                    <option value="incoming">เอกสารรับเข้า</option>
+                    <option value="outgoing">เอกสารส่งออก</option>
+                  </select>
                 </div>
-              </div>
 
-              <div className="bg-white/80 backdrop-blur-sm rounded-xl p-4 space-y-3 text-sm border border-blue-100">
-                {/* 1. ส่วนราชการ (แสดงข้อความที่สกัดได้ทั้งหมด) */}
-                <div className="flex flex-col gap-1 border-b border-gray-100 pb-2">
-                  <span className="text-gray-500 font-medium italic">ข้อความที่สกัดได้ (Extracted Text):</span>
-                  <div className="bg-blue-50/50 p-3 rounded-lg text-gray-800 font-semibold leading-relaxed whitespace-pre-line border border-blue-100">
-                    {documentDetails.full_raw_text || "ไม่พบข้อความในเอกสาร"}
+                {/* Grid Layout */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      ชื่อเอกสาร
+                    </label>
+                    <input
+                      type="text"
+                      name="title"
+                      value={formData.title}
+                      onChange={handleInputChange}
+                      className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all"
+                      placeholder="ชื่อเอกสาร"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      เลขที่เอกสาร
+                    </label>
+                    <input
+                      type="text"
+                      name="documentNo"
+                      value={formData.documentNo}
+                      onChange={handleInputChange}
+                      className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all"
+                      placeholder="เลขที่เอกสาร"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      จาก
+                    </label>
+                    <input
+                      type="text"
+                      name="from"
+                      value={formData.from}
+                      onChange={handleInputChange}
+                      className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all"
+                      placeholder="ผู้ส่ง/หน่วยงาน"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      ถึง
+                    </label>
+                    <input
+                      type="text"
+                      name="to"
+                      value={formData.to}
+                      onChange={handleInputChange}
+                      className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all"
+                      placeholder="ผู้รับ/หน่วยงาน"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      วันที่
+                    </label>
+                    <input
+                      type="text"
+                      name="date"
+                      value={formData.date}
+                      onChange={handleInputChange}
+                      className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all"
+                      placeholder="วันที่เอกสาร"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      ความสำคัญ
+                    </label>
+                    <select
+                      name="priority"
+                      value={formData.priority}
+                      onChange={handleInputChange}
+                      className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all"
+                    >
+                      <option value="ปกติ">ปกติ</option>
+                      <option value="ด่วน">ด่วน</option>
+                      <option value="ด่วนมาก">ด่วนมาก</option>
+                      <option value="ด่วนที่สุด">ด่วนที่สุด</option>
+                    </select>
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
-                  {/* 2. เลขที่ */}
-                  <div className="flex justify-between border-b border-gray-50 pb-1">
-                    <span className="text-gray-500">เลขที่:</span>
-                    <span className="font-bold text-gray-900">{documentDetails.documentNo || '-'}</span>
-                  </div>
-                  {/* 3. วันที่ */}
-                  <div className="flex justify-between border-b border-gray-50 pb-1">
-                    <span className="text-gray-500">วันที่:</span>
-                    <span className="font-bold text-gray-900">{documentDetails.date || '-'}</span>
-                  </div>
+                {/* Subject & Department */}
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                    เรื่อง
+                  </label>
+                  <input
+                    type="text"
+                    name="subject"
+                    value={formData.subject}
+                    onChange={handleInputChange}
+                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all"
+                    placeholder="เรื่อง"
+                  />
                 </div>
-                
-                {/* 4. เรื่อง */}
-                <div className="flex justify-between">
-                  <span className="text-gray-500">เรื่อง:</span>
-                  <span className="font-bold text-gray-900 text-right">{documentDetails.subject || '-'}</span>
+
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                    หน่วยงาน
+                  </label>
+                  <input
+                    type="text"
+                    name="department"
+                    value={formData.department}
+                    onChange={handleInputChange}
+                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all"
+                    placeholder="หน่วยงาน"
+                  />
                 </div>
-              </div>
-            </div>
-          )}
 
-
-          {/* Form Inputs */}
-          <div className="grid grid-cols-2 gap-5">
-            <div className="col-span-2">
-              <label className="block text-sm font-bold text-gray-700 mb-2">หัวข้อเอกสาร / เรื่อง</label>
-              <input
-                type="text"
-                value={formData.title}
-                onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                className="w-full px-4 py-3 border-2 border-gray-100 rounded-xl"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-bold text-gray-700 mb-2">ส่วนราชการ / จาก</label>
-              <input
-                type="text"
-                value={formData.from}
-                onChange={(e) => setFormData({ ...formData, from: e.target.value })}
-                className="w-full px-4 py-3 border-2 border-gray-100 rounded-xl"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-bold text-gray-700 mb-2">ความเร่งด่วน</label>
-              <select
-                value={formData.priority}
-                onChange={(e) => setFormData({ ...formData, priority: e.target.value })}
-                className="w-full px-4 py-3 border-2 border-gray-100 rounded-xl"
-              >
-                <option value="ปกติ">ปกติ</option>
-                <option value="ด่วน">ด่วน</option>
-                <option value="ด่วนมาก">ด่วนมาก</option>
-                <option value="ด่วนที่สุด">ด่วนที่สุด</option>
-              </select>
-            </div>
+                {/* Buttons */}
+                <div className="flex gap-4 pt-4">
+                  <button
+                    type="button"
+                    onClick={onClose}
+                    className="flex-1 px-6 py-3 border-2 border-gray-300 text-gray-700 rounded-xl font-semibold hover:bg-gray-50 transition-all"
+                  >
+                    ยกเลิก
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={processing || loadingDetails}
+                    className="flex-1 px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl font-semibold hover:shadow-lg hover:shadow-blue-500/30 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {loadingDetails ? 'กำลังประมวลผล...' : 'บันทึก'}
+                  </button>
+                </div>
+              </form>
+            )}
           </div>
-
-          {/* File Upload Options */}
-          {showFileOptions && !processing && (
-            <div className="grid grid-cols-3 gap-4">
-              <label className="cursor-pointer group">
-                <input type="file" onChange={handleFileUpload} accept=".pdf,.jpg,.jpeg,.png" className="hidden" />
-                <div className="h-32 border-3 border-dashed border-blue-100 bg-blue-50/30 rounded-2xl flex flex-col items-center justify-center hover:bg-blue-50">
-                  <Folder className="w-8 h-8 mb-2 text-blue-600" />
-                  <p className="text-sm font-bold">เลือกไฟล์</p>
-                </div>
-              </label>
-              <label className="cursor-pointer group">
-                <input type="file" onChange={handleFileUpload} accept="image/*" capture="environment" className="hidden" />
-                <div className="h-32 border-3 border-dashed border-purple-100 bg-purple-50/30 rounded-2xl flex flex-col items-center justify-center hover:bg-purple-50">
-                  <Camera className="w-8 h-8 mb-2 text-purple-600" />
-                  <p className="text-sm font-bold">ถ่ายภาพ</p>
-                </div>
-              </label>
-              <label className="cursor-pointer group">
-                <input type="file" onChange={handleFileUpload} accept="image/*" className="hidden" />
-                <div className="h-32 border-3 border-dashed border-emerald-100 bg-emerald-50/30 rounded-2xl flex flex-col items-center justify-center hover:bg-emerald-50">
-                  <Image className="w-8 h-8 mb-2 text-emerald-600" />
-                  <p className="text-sm font-bold">รูปภาพ</p>
-                </div>
-              </label>
-            </div>
-          )}
-        </div>
-
-        {/* Footer */}
-        <div className="flex gap-4 p-6 border-t border-gray-100 bg-gray-50 shrink-0">
-          <button onClick={onClose} className="flex-1 px-6 py-3 border-2 border-gray-200 rounded-xl font-bold text-gray-500">ยกเลิก</button>
-          <button
-            onClick={handleSubmit}
-            disabled={processing || !formData.file}
-            className={`flex-1 px-6 py-3 rounded-xl font-bold text-white shadow-lg ${(processing || !formData.file) ? 'bg-gray-300' : 'bg-gradient-to-r from-emerald-500 to-teal-600'}`}
-          >
-            {processing ? 'กำลังประมวลผล...' : 'บันทึกเอกสาร'}
-          </button>
         </div>
       </div>
 
-      {/* Crop Modal */}
-      {cropModalOpen && tempImage && (
-        <Modal
-          isOpen={cropModalOpen}
-          onRequestClose={() => setCropModalOpen(false)}
-          className="max-w-2xl mx-auto mt-24 bg-white rounded-xl p-6 outline-none z-50"
-          overlayClassName="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-start justify-center z-50"
-        >
-          <div className="relative w-full h-96 bg-gray-200 rounded-lg overflow-hidden">
-            <Cropper
-              image={tempImage}
-              crop={crop}
-              zoom={zoom}
-              aspect={aspect}
-              onCropChange={setCrop}
-              onZoomChange={setZoom}
-              onCropComplete={(_, pixels) => setCroppedAreaPixels(pixels)}
-            />
+      {/* ✅ Loading Modal with Progress */}
+      {loadingDetails && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50">
+          <div className="bg-white rounded-2xl p-8 max-w-md w-full mx-4 shadow-2xl">
+            <div className="text-center">
+              {/* ✅ Animated Icon */}
+              <div className="w-20 h-20 mx-auto mb-6 relative">
+                <div className="absolute inset-0 bg-blue-500 rounded-full animate-ping opacity-20"></div>
+                <div className="relative w-20 h-20 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-full flex items-center justify-center">
+                  <svg className="w-10 h-10 text-white animate-spin" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                </div>
+              </div>
+
+              {/* ✅ Title */}
+              <h3 className="text-xl font-bold text-gray-900 mb-2">
+                กำลังประมวลผล OCR
+              </h3>
+              
+              {/* ✅ Subtitle */}
+              <p className="text-sm text-gray-600 mb-6">
+                {progress < 30 ? '🔍 กำลังวิเคราะห์เอกสาร...' : 
+                 progress < 60 ? '📝 กำลังแยกข้อความ...' : 
+                 progress < 90 ? '🔄 กำลังประมวลผลข้อมูล...' : 
+                 '✨ เกือบเสร็จแล้ว...'}
+              </p>
+
+              {/* ✅ Progress Bar */}
+              <div className="w-full bg-gray-200 rounded-full h-3 mb-4 overflow-hidden">
+                <div 
+                  className="h-full bg-gradient-to-r from-blue-500 to-indigo-600 rounded-full transition-all duration-500 ease-out"
+                  style={{ width: `${progress}%` }}
+                ></div>
+              </div>
+
+              {/* ✅ Percentage */}
+              <div className="flex items-center justify-between text-sm mb-4">
+                <span className="text-gray-600">ความคืบหน้า</span>
+                <span className="font-bold text-blue-600">{progress.toFixed(0)}%</span>
+              </div>
+
+              {/* ✅ Time Estimate */}
+              <p className="text-xs text-gray-500 mb-4">
+                ⏱️ ใช้เวลาประมาณ 1-2 นาที (ขึ้นอยู่กับขนาดไฟล์)
+              </p>
+
+              {/* ✅ Warning */}
+              {progress > 0 && progress < 100 && (
+                <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                  <p className="text-xs text-yellow-800">
+                    ⚠️ กรุณาอย่าปิดหน้าต่างนี้ระหว่างประมวลผล
+                  </p>
+                </div>
+              )}
+            </div>
           </div>
-          <div className="flex justify-end mt-6 gap-3">
-            <button className="px-6 py-2 rounded-xl border-2" onClick={() => setCropModalOpen(false)}>ยกเลิก</button>
-            <button
-              className="px-6 py-2 rounded-xl bg-blue-600 text-white font-bold"
-              onClick={async () => {
-                const croppedBlob = await getCroppedImg(tempImage, croppedAreaPixels, rotation);
-                const file = new File([croppedBlob], formData.file.name, { type: "image/jpeg" });
-                setFormData(prev => ({ ...prev, file }));
-                setPreviewUrl(URL.createObjectURL(file));
-                setCropModalOpen(false);
-                processFile(file, { title: file.name, document_type: formData.type });
-              }}
-            >
-              ยืนยันและสแกน
-            </button>
-          </div>
-        </Modal>
+        </div>
       )}
-    </div>
+
+      {/* Crop Modal */}
+      <Modal
+        isOpen={cropModalOpen}
+        onRequestClose={() => setCropModalOpen(false)}
+        className="fixed inset-0 flex items-center justify-center p-4"
+        overlayClassName="fixed inset-0 bg-black/70"
+      >
+        <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden shadow-2xl">
+          <div className="p-4 border-b">
+            <h3 className="text-lg font-bold">ปรับแต่งภาพ</h3>
+          </div>
+
+          <div className="relative h-96 bg-gray-900">
+            {tempImage && (
+              <Cropper
+                image={tempImage}
+                crop={crop}
+                zoom={zoom}
+                aspect={4 / 3}
+                onCropChange={setCrop}
+                onZoomChange={setZoom}
+                onCropComplete={(_, croppedAreaPixels) => setCroppedAreaPixels(croppedAreaPixels)}
+              />
+            )}
+          </div>
+
+          <div className="p-4 border-t">
+            <div className="mb-4">
+              <label className="text-sm font-medium text-gray-700">ซูม</label>
+              <input
+                type="range"
+                min={1}
+                max={3}
+                step={0.1}
+                value={zoom}
+                onChange={(e) => setZoom(parseFloat(e.target.value))}
+                className="w-full"
+              />
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => setCropModalOpen(false)}
+                className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+              >
+                ยกเลิก
+              </button>
+              <button
+                onClick={handleCropComplete}
+                className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center justify-center gap-2"
+              >
+                <CheckCircle className="w-5 h-5" />
+                ใช้ภาพนี้
+              </button>
+            </div>
+          </div>
+        </div>
+      </Modal>
+    </>
   );
 }
 
