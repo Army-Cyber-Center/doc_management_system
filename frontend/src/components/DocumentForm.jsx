@@ -414,7 +414,7 @@ if (cropModalOpen) {
               {/* ✅ เพิ่มปุ่ม "อิสระ" */}
               <button
                 type="button"
-                onClick={() => setAspect(null)} // ✅ null = ปรับได้อิสระ
+                onClick={() => setAspect(4/3)} // ✅ null = ปรับได้อิสระ
                 className={`px-3 py-2 rounded-lg text-sm font-medium transition-all ${
                   aspect === null
                     ? 'bg-green-600 text-white shadow-lg'
