@@ -49,7 +49,7 @@ const parseOCRText = (extractedText) => {
   return result;
 };
 
-// ✅ waitForDocument function
+// ✅ waitForDocument function - รองรับทั้ง 2 format
 const waitForDocument = async (
   getDocument,
   id,
@@ -91,8 +91,13 @@ const waitForDocument = async (
       console.log(`⏳ [${elapsed}s] กำลังรอ OCR... (ครั้งที่ ${attempts}/${maxAttempts})`);
       const data = await getDocument(id);
 
-      if (data?.ocr_data?.extracted_text) {
-        console.log('✅ OCR เสร็จแล้ว!');
+      // ✅ รองรับทั้ง 2 format
+      const hasOCRData = 
+        data?.ocr_data?.extracted_text ||  // format เก่า
+        data?.extracted_text;               // format ใหม่
+
+      if (hasOCRData) {
+        console.log('✅ OCR เสร็จแล้ว! Data:', data);
         if (onProgress) onProgress(100);
         if (onMessage) onMessage('✅ ประมวลผลสำเร็จ!');
         return data;
@@ -127,7 +132,7 @@ function DocumentForm({ onClose, onSubmit }) {
 
   const { processing, result, processFile, getDocument, reset } = useTyphoonOCR();
 
-  // ✅ Crop state (เพิ่ม rotation, flip, aspect)
+  // ✅ Crop state
   const [cropModalOpen, setCropModalOpen] = useState(false);
   const [crop, setCrop] = useState({ x: 0, y: 0 });
   const [zoom, setZoom] = useState(1);
@@ -179,10 +184,18 @@ function DocumentForm({ onClose, onSubmit }) {
 
         setProgress(100);
         setProgressMessage('✅ ประมวลผลสำเร็จ!');
-        console.log('✅ ดึงข้อมูลสำเร็จ!', data);
+        console.log('✅ ดึงข้อมูลสำเร็จ! Full data:', data);
 
-        const rawText = data.ocr_data?.extracted_text || '';
+        // ✅ รองรับทั้ง 2 format
+        const rawText = 
+          data.ocr_data?.extracted_text ||  // format เก่า
+          data.extracted_text ||             // format ใหม่
+          '';
+        
+        console.log('📝 Raw text:', rawText);
+        
         const parsed = parseOCRText(rawText);
+        console.log('✅ Parsed:', parsed);
 
         setDocumentDetails({
           ...parsed,
@@ -338,7 +351,7 @@ function DocumentForm({ onClose, onSubmit }) {
     }
   };
 
-
+  // ✅ Crop Modal
   if (cropModalOpen) {
     return (
       <Modal
@@ -375,7 +388,7 @@ function DocumentForm({ onClose, onSubmit }) {
             </button>
           </div>
 
-          {/* ✅ Cropper Area - สี่เหลี่ยม + grid */}
+          {/* Cropper Area */}
           <div className="relative bg-gray-900 flex-1" style={{ minHeight: '400px' }}>
             {tempImage && (
               <Cropper
@@ -387,17 +400,16 @@ function DocumentForm({ onClose, onSubmit }) {
                 onCropChange={setCrop}
                 onZoomChange={setZoom}
                 onCropComplete={(_, croppedAreaPixels) => setCroppedAreaPixels(croppedAreaPixels)}
-                // ✅ เพิ่ม props เหล่านี้
-                cropShape="rect"              // ✅ เปลี่ยนเป็นสี่เหลี่ยม (แทน "round")
-                showGrid={true}               // ✅ แสดง grid
-                objectFit="contain"           // ✅ แสดงภาพเต็ม
+                cropShape="rect"
+                showGrid={true}
+                objectFit="contain"
                 style={{
                   containerStyle: {
                     backgroundColor: '#000'
                   },
                   cropAreaStyle: {
-                    border: '2px solid #3b82f6',  // สีน้ำเงิน
-                    color: 'rgba(59, 130, 246, 0.3)'  // สีพื้นหลังโปร่งแสง
+                    border: '3px solid #3b82f6',
+                    color: 'rgba(59, 130, 246, 0.2)'
                   }
                 }}
               />
@@ -406,20 +418,19 @@ function DocumentForm({ onClose, onSubmit }) {
 
           {/* Controls */}
           <div className="p-6 border-t bg-gray-50 space-y-6 max-h-[400px] overflow-y-auto">
-
-          // ในส่วน Aspect Ratio buttons แก้เป็น:
-
+            
+            {/* Aspect Ratio */}
             <div>
               <label className="text-sm font-semibold text-gray-700 mb-3 block">อัตราส่วน</label>
               <div className="grid grid-cols-6 gap-2">
-                {/* ✅ เพิ่มปุ่ม "Header" (A4 กว้าง 20%) */}
                 <button
                   type="button"
-                  onClick={() => setAspect(1 / 0.2828)} // 3.54:1
-                  className={`px-3 py-2 rounded-lg text-sm font-medium transition-all ${aspect === 1 / 0.2828
+                  onClick={() => setAspect(1 / 0.2828)}
+                  className={`px-3 py-2 rounded-lg text-sm font-medium transition-all ${
+                    aspect === 1 / 0.2828
                       ? 'bg-purple-600 text-white shadow-lg'
                       : 'bg-white border-2 border-gray-200 text-gray-700 hover:border-purple-400'
-                    }`}
+                  }`}
                 >
                   📄 Header
                 </button>
@@ -427,10 +438,11 @@ function DocumentForm({ onClose, onSubmit }) {
                 <button
                   type="button"
                   onClick={() => setAspect(16 / 9)}
-                  className={`px-3 py-2 rounded-lg text-sm font-medium transition-all ${aspect === 16 / 9
+                  className={`px-3 py-2 rounded-lg text-sm font-medium transition-all ${
+                    aspect === 16 / 9
                       ? 'bg-blue-600 text-white shadow-lg'
                       : 'bg-white border-2 border-gray-200 text-gray-700 hover:border-blue-400'
-                    }`}
+                  }`}
                 >
                   16:9
                 </button>
@@ -438,10 +450,11 @@ function DocumentForm({ onClose, onSubmit }) {
                 <button
                   type="button"
                   onClick={() => setAspect(4 / 3)}
-                  className={`px-3 py-2 rounded-lg text-sm font-medium transition-all ${aspect === 4 / 3
+                  className={`px-3 py-2 rounded-lg text-sm font-medium transition-all ${
+                    aspect === 4 / 3
                       ? 'bg-blue-600 text-white shadow-lg'
                       : 'bg-white border-2 border-gray-200 text-gray-700 hover:border-blue-400'
-                    }`}
+                  }`}
                 >
                   4:3
                 </button>
@@ -449,10 +462,11 @@ function DocumentForm({ onClose, onSubmit }) {
                 <button
                   type="button"
                   onClick={() => setAspect(1)}
-                  className={`px-3 py-2 rounded-lg text-sm font-medium transition-all ${aspect === 1
+                  className={`px-3 py-2 rounded-lg text-sm font-medium transition-all ${
+                    aspect === 1
                       ? 'bg-blue-600 text-white shadow-lg'
                       : 'bg-white border-2 border-gray-200 text-gray-700 hover:border-blue-400'
-                    }`}
+                  }`}
                 >
                   1:1
                 </button>
@@ -460,10 +474,11 @@ function DocumentForm({ onClose, onSubmit }) {
                 <button
                   type="button"
                   onClick={() => setAspect(3 / 4)}
-                  className={`px-3 py-2 rounded-lg text-sm font-medium transition-all ${aspect === 3 / 4
+                  className={`px-3 py-2 rounded-lg text-sm font-medium transition-all ${
+                    aspect === 3 / 4
                       ? 'bg-blue-600 text-white shadow-lg'
                       : 'bg-white border-2 border-gray-200 text-gray-700 hover:border-blue-400'
-                    }`}
+                  }`}
                 >
                   3:4
                 </button>
@@ -471,16 +486,16 @@ function DocumentForm({ onClose, onSubmit }) {
                 <button
                   type="button"
                   onClick={() => setAspect(9 / 16)}
-                  className={`px-3 py-2 rounded-lg text-sm font-medium transition-all ${aspect === 9 / 16
+                  className={`px-3 py-2 rounded-lg text-sm font-medium transition-all ${
+                    aspect === 9 / 16
                       ? 'bg-blue-600 text-white shadow-lg'
                       : 'bg-white border-2 border-gray-200 text-gray-700 hover:border-blue-400'
-                    }`}
+                  }`}
                 >
                   9:16
                 </button>
               </div>
 
-              {/* ✅ เพิ่มคำอธิบาย */}
               {aspect === 1 / 0.2828 && (
                 <p className="text-xs text-purple-600 mt-2 flex items-center gap-1">
                   <span>ℹ️</span>
@@ -539,20 +554,22 @@ function DocumentForm({ onClose, onSubmit }) {
                 <button
                   type="button"
                   onClick={() => setFlipHorizontal(!flipHorizontal)}
-                  className={`flex-1 px-4 py-3 rounded-lg font-medium transition-all ${flipHorizontal
+                  className={`flex-1 px-4 py-3 rounded-lg font-medium transition-all ${
+                    flipHorizontal
                       ? 'bg-blue-600 text-white shadow-lg'
                       : 'bg-white border-2 border-gray-200 text-gray-700 hover:border-blue-400'
-                    }`}
+                  }`}
                 >
                   ↔️ แนวนอน
                 </button>
                 <button
                   type="button"
                   onClick={() => setFlipVertical(!flipVertical)}
-                  className={`flex-1 px-4 py-3 rounded-lg font-medium transition-all ${flipVertical
+                  className={`flex-1 px-4 py-3 rounded-lg font-medium transition-all ${
+                    flipVertical
                       ? 'bg-blue-600 text-white shadow-lg'
                       : 'bg-white border-2 border-gray-200 text-gray-700 hover:border-blue-400'
-                    }`}
+                  }`}
                 >
                   ↕️ แนวตั้ง
                 </button>
@@ -568,7 +585,7 @@ function DocumentForm({ onClose, onSubmit }) {
                   setRotation(0);
                   setFlipHorizontal(false);
                   setFlipVertical(false);
-                  setAspect(4 / 3); // ✅ เปลี่ยนจาก null เป็น 4/3
+                  setAspect(4 / 3);
                   setCrop({ x: 0, y: 0 });
                 }}
                 className="w-full px-4 py-2 bg-gray-100 border-2 border-gray-300 text-gray-700 rounded-lg hover:bg-gray-200 transition-all text-sm font-medium"
@@ -611,7 +628,7 @@ function DocumentForm({ onClose, onSubmit }) {
 
   return (
     <>
-      {/* ✅ Main Modal */}
+      {/* Main Modal */}
       <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
         <div className="bg-white rounded-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto shadow-2xl">
           {/* Header */}
@@ -626,7 +643,7 @@ function DocumentForm({ onClose, onSubmit }) {
           </div>
 
           <div className="p-6">
-            {/* ✅ File Upload Options */}
+            {/* File Upload Options */}
             {showFileOptions && !processing && !formData.file && (
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
                 <label className="cursor-pointer group">
@@ -684,7 +701,7 @@ function DocumentForm({ onClose, onSubmit }) {
               </div>
             )}
 
-            {/* ✅ Processing Indicator */}
+            {/* Processing Indicator */}
             {processing && (
               <div className="bg-blue-50 border-2 border-blue-200 rounded-xl p-6 mb-6">
                 <div className="flex items-center gap-4">
@@ -697,13 +714,11 @@ function DocumentForm({ onClose, onSubmit }) {
               </div>
             )}
 
-            {/* ✅ Form */}
+            {/* Form */}
             {formData.file && !processing && (
               <form onSubmit={handleSubmit} className="space-y-6">
                 <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">
-                    ประเภทเอกสาร
-                  </label>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">ประเภทเอกสาร</label>
                   <select
                     name="type"
                     value={formData.type}
@@ -838,14 +853,13 @@ function DocumentForm({ onClose, onSubmit }) {
         </div>
       </div>
 
-      {/* ✅ Loading Modal with Close Button */}
+      {/* Loading Modal with Close Button */}
       {loadingDetails && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-[9999]">
           <div className="bg-white rounded-2xl p-8 max-w-md w-full mx-4 shadow-2xl relative">
-            {/* ✅ ปุ่มปิด (มุมขวาบน) */}
+            {/* ปุ่มปิด */}
             <button
               onClick={() => {
-                // ✅ ยืนยันก่อนปิด
                 if (window.confirm(
                   '⚠️ การปิดหน้าต่างจะยกเลิกการประมวลผล OCR\n\n' +
                   'คุณต้องการปิดหรือไม่?'
@@ -854,7 +868,6 @@ function DocumentForm({ onClose, onSubmit }) {
                   setLoadingDetails(false);
                   setProgress(0);
                   setProgressMessage('');
-                  // ✅ รีเซ็ตกลับไปหน้า upload
                   setShowFileOptions(true);
                   setFormData(prev => ({ ...prev, file: null }));
                   reset();
@@ -867,7 +880,6 @@ function DocumentForm({ onClose, onSubmit }) {
             </button>
 
             <div className="text-center">
-              {/* Animated Icon */}
               <div className="w-20 h-20 mx-auto mb-6 relative">
                 <div className="absolute inset-0 bg-blue-500 rounded-full animate-ping opacity-20"></div>
                 <div className="relative w-20 h-20 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-full flex items-center justify-center shadow-lg">
@@ -878,19 +890,11 @@ function DocumentForm({ onClose, onSubmit }) {
                 </div>
               </div>
 
-              {/* Title */}
-              <h3 className="text-xl font-bold text-gray-900 mb-2">
-                กำลังประมวลผล OCR
-              </h3>
+              <h3 className="text-xl font-bold text-gray-900 mb-2">กำลังประมวลผล OCR</h3>
+              <p className="text-sm text-gray-600 mb-6 min-h-[24px]">{progressMessage || 'กำลังเตรียมการ...'}</p>
 
-              {/* Dynamic Message */}
-              <p className="text-sm text-gray-600 mb-6 min-h-[24px]">
-                {progressMessage || 'กำลังเตรียมการ...'}
-              </p>
-
-              {/* Progress Bar */}
               <div className="w-full bg-gray-200 rounded-full h-3 mb-4 overflow-hidden shadow-inner">
-                <div
+                <div 
                   className="h-full bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-500 rounded-full transition-all duration-700 ease-out relative"
                   style={{ width: `${progress}%` }}
                 >
@@ -898,19 +902,16 @@ function DocumentForm({ onClose, onSubmit }) {
                 </div>
               </div>
 
-              {/* Percentage & Time */}
               <div className="flex items-center justify-between text-sm mb-4">
                 <span className="text-gray-600">ความคืบหน้า</span>
                 <span className="font-bold text-blue-600 tabular-nums">{progress.toFixed(0)}%</span>
               </div>
 
-              {/* Time Estimate */}
               <div className="flex items-center justify-center gap-2 text-xs text-gray-500 mb-4">
                 <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
                 <span>ใช้เวลาประมาณ 1-2 นาที</span>
               </div>
 
-              {/* Warning Box */}
               {progress > 0 && progress < 100 && (
                 <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-lg animate-in fade-in mb-3">
                   <p className="text-xs text-yellow-800 flex items-center justify-center gap-2">
@@ -920,7 +921,6 @@ function DocumentForm({ onClose, onSubmit }) {
                 </div>
               )}
 
-              {/* Success Box */}
               {progress === 100 && (
                 <div className="p-3 bg-green-50 border border-green-200 rounded-lg animate-in fade-in">
                   <p className="text-xs text-green-800 flex items-center justify-center gap-2">
@@ -930,7 +930,6 @@ function DocumentForm({ onClose, onSubmit }) {
                 </div>
               )}
 
-              {/* ✅ ปุ่มยกเลิกด้านล่าง (สำหรับผู้ใช้ที่มองไม่เห็นปุ่มมุมบน) */}
               {progress < 100 && (
                 <button
                   onClick={() => {
@@ -956,7 +955,6 @@ function DocumentForm({ onClose, onSubmit }) {
           </div>
         </div>
       )}
-
     </>
   );
 }
