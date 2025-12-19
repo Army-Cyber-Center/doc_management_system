@@ -6,9 +6,7 @@ import getCroppedImg from '../utils/cropImage';
 import { useTyphoonOCR } from '../hooks/useTyphoonOCR';
 
 // ✅ Parse OCR extracted_text into structured fields
-const parseOCRText = (extractedText) => {
-  if (!extractedText) return {};
-
+const parseOCRText = (extractedText, parsedFields = {}) => {
   const result = {
     department: '',
     documentNo: '',
@@ -18,13 +16,35 @@ const parseOCRText = (extractedText) => {
     priority: 'ปกติ'
   };
 
+  // ✅ ถ้ามี parsed_fields จาก API ให้ใช้เลย
+  if (parsedFields && Object.keys(parsedFields).length > 0) {
+    console.log('📋 ใช้ parsed_fields จาก API:', parsedFields);
+    
+    result.documentNo = parsedFields['ที่'] || parsedFields['เลขที่'] || parsedFields['document_no'] || '';
+    result.date = parsedFields['วันที่'] || parsedFields['date'] || '';
+    result.from = parsedFields['ส่วนราชการ'] || parsedFields['จาก'] || parsedFields['from'] || '';
+    result.subject = parsedFields['เรื่อง'] || parsedFields['subject'] || '';
+    result.department = parsedFields['ส่วนราชการ'] || parsedFields['หน่วยงาน'] || parsedFields['department'] || '';
+    
+    // เช็ค priority
+    const allText = Object.values(parsedFields).join(' ').toLowerCase();
+    if (allText.includes('ด่วนที่สุด')) result.priority = 'ด่วนที่สุด';
+    else if (allText.includes('ด่วนมาก')) result.priority = 'ด่วนมาก';
+    else if (allText.includes('ด่วน')) result.priority = 'ด่วน';
+    
+    return result;
+  }
+
+  // ✅ ถ้าไม่มี parsed_fields ให้ parse จาก raw text แบบเดิม
+  if (!extractedText) return result;
+
   const text = extractedText;
 
-  const datePattern = /วันที่\s*[:\s]*([0-9]{1,2}[/\-][0-9]{1,2}[/\-][0-9]{2,4}|[\d/\-]+)/gi;
+  const datePattern = /วันที่\s*[:\s]*([0-9]{1,2}[/\-][0-9]{1,2}[/\-][0-9]{2,4}|[\d/\-]+|[๐-๙]{1,2}\s*[ก-๙.]+\s*[๐-๙]{2,4})/gi;
   const dateMatch = text.match(datePattern);
   if (dateMatch) result.date = dateMatch[0].replace(/วันที่\s*[:\s]*/gi, '').trim();
 
-  const numberPattern = /(?:เลขที่|ที่)\s*[:\s]*([A-Z0-9/\-.\s]+?)(?:\n|$)/gi;
+  const numberPattern = /(?:เลขที่|ที่)\s*[:\s]*([A-Z0-9ก-๙๐-๙/\-.\s()]+?)(?:\n|$)/gi;
   const numberMatch = text.match(numberPattern);
   if (numberMatch) {
     result.documentNo = numberMatch[0].replace(/(?:เลขที่|ที่)\s*[:\s]*/gi, '').trim().split('\n')[0];
@@ -188,14 +208,22 @@ function DocumentForm({ onClose, onSubmit }) {
 
         // ✅ รองรับทั้ง 2 format
         const rawText = 
-          data.ocr_data?.extracted_text ||  // format เก่า
-          data.extracted_text ||             // format ใหม่
+          data.ocr_data?.extracted_text ||
+          data.extracted_text ||
           '';
-        
+
+        // ✅ ดึง parsed_fields ถ้ามี
+        const parsedFieldsFromAPI = 
+          data.ocr_data?.extracted_fields?.parsed_fields ||
+          data.extracted_fields?.parsed_fields ||
+          {};
+
         console.log('📝 Raw text:', rawText);
-        
-        const parsed = parseOCRText(rawText);
-        console.log('✅ Parsed:', parsed);
+        console.log('📋 Parsed fields from API:', parsedFieldsFromAPI);
+
+        // ✅ ส่ง parsed_fields เข้าไปด้วย
+        const parsed = parseOCRText(rawText, parsedFieldsFromAPI);
+        console.log('✅ Parsed result:', parsed);
 
         setDocumentDetails({
           ...parsed,
@@ -232,6 +260,7 @@ function DocumentForm({ onClose, onSubmit }) {
 
   useEffect(() => {
     if (documentDetails) {
+      console.log('🔄 กำลังอัพเดตฟอร์มด้วยข้อมูล OCR:', documentDetails);
       setFormData(prev => ({
         ...prev,
         department: documentDetails.department || prev.department,
