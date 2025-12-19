@@ -61,7 +61,7 @@ export default function FileExplorer({ fileSystem, onClose, onFileSelect }) {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {fileSystem[currentFolder]?.children?.map((item, idx) => (
               <div
-                key={idx}
+                key={item.id || item.name || idx}
                 onClick={() => {
                   if (item.type === 'folder') {
                     handleFolderClick(item.id);

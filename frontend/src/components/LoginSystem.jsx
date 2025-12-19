@@ -110,7 +110,6 @@ export default function LoginSystem() {
       });
 
       const data = await response.json();
-      console.log('Registration response:', data);
 
       if (!response.ok) {
         throw new Error(data.detail || data.error || 'สมัครสมาชิกไม่สำเร็จ');
@@ -390,7 +389,8 @@ export default function LoginSystem() {
                     'สมัครสมาชิก'
                   )}
                 </button>
-              </div>
+              </form>
+
             )}
           </div>
         </div>

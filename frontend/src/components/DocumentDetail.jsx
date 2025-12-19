@@ -18,7 +18,7 @@ function DocumentDetail({ document, onClose, onUpdate }) {
     switch(priority) {
       case 'ด่วนที่สุด': return 'text-red-500';
       case 'ด่วนมาก': return 'text-red-500';
-      case 'ด่วนมาก': return 'text-orange-500';
+      case 'ด่วน': return 'text-orange-500';
       case 'ปกติ': return 'text-green-500';
       default: return 'text-gray-500';
     }

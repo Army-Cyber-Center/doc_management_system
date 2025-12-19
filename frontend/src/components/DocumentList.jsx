@@ -64,9 +64,8 @@ function DocumentList({
       let data = null;
       let lastError = null;
 
-      for (const apiUrl of endpoints) {
+        for (const apiUrl of endpoints) {
         try {
-          console.log('Trying endpoint:', apiUrl);
 
           const response = await fetch(apiUrl, {
             method: 'GET',
@@ -79,7 +78,6 @@ function DocumentList({
           if (response.ok) {
             const responseText = await response.text();
             data = JSON.parse(responseText);
-            console.log('Success! Data from:', apiUrl);
             break;
           } else {
             lastError = `${response.status} ${response.statusText}`;
@@ -94,7 +92,7 @@ function DocumentList({
         throw new Error(`All endpoints failed. Last error: ${lastError}`);
       }
 
-      console.log('OCR Documents:', data);
+      
 
       // Handle different response formats
       const documentsList = Array.isArray(data) ? data : data.data || data.documents || [];
@@ -143,7 +141,6 @@ function DocumentList({
     });
 
     setStats(newStats);
-    console.log('Stats calculated:', newStats);
   };
 
   /**
@@ -167,9 +164,8 @@ function DocumentList({
       let data = null;
       let lastError = null;
 
-      for (const apiUrl of endpoints) {
+        for (const apiUrl of endpoints) {
         try {
-          console.log('Trying endpoint:', apiUrl);
 
           const response = await fetch(apiUrl, {
             method: 'GET',
@@ -181,7 +177,6 @@ function DocumentList({
 
           if (response.ok) {
             data = await response.json();
-            console.log('Success! Data from:', apiUrl);
             break;
           } else {
             lastError = `${response.status} ${response.statusText}`;
@@ -196,7 +191,7 @@ function DocumentList({
         throw new Error(`All endpoints failed. Last error: ${lastError}`);
       }
 
-      console.log('OCR Document details:', data);
+      
       return data;
 
     } catch (err) {

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react'; // นำเข้า useCallback
+import React, { useState, useEffect } from 'react';
 import { X, CheckCircle, FileText, Camera, Image, Folder } from 'lucide-react';
 import Cropper from 'react-easy-crop';
 import Modal from 'react-modal';
