@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { X, User, Calendar, Clock, FileText, Download, Edit, TrendingUp, Save } from 'lucide-react';
 
 const API_URL = process.env.REACT_APP_API_URL;
@@ -29,9 +29,10 @@ function DocumentDetail({ document, onClose, onUpdate }) {
 
   console.log('✅ Normalized:', normalizedDoc);
 
-  // ✅ เพิ่ม state สำหรับโหมดแก้ไข
+  // ✅ State
   const [isEditing, setIsEditing] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [workflows, setWorkflows] = useState([]);
   const [editData, setEditData] = useState({
     title: normalizedDoc.title || '',
     from: normalizedDoc.from || '',
@@ -76,133 +77,159 @@ function DocumentDetail({ document, onClose, onUpdate }) {
     };
   };
 
-  // ✅ ฟังก์ชันอัพเดทสถานะผ่าน workflow API
-const handleUpdateWorkflow = async () => {
-  setIsLoading(true);
+  /**
+   * ✅ Fetch workflows สำหรับเอกสารนี้
+   */
+  useEffect(() => {
+    const fetchWorkflows = async () => {
+      try {
+        const headers = getAuthHeaders();
+        const response = await fetch(`${API_URL}/workflows/document/${document.id}`, {
+          headers
+        });
 
-  try {
-    const headers = getAuthHeaders();
+        if (response.status === 401) {
+          handleUnauthorized();
+          return;
+        }
 
-    // ✅ map สถานะปัจจุบัน → action
-    const getNextAction = () => {
-      if (currentStatus === 'รับแล้ว' || currentStatus === 'incoming') {
-        return { action: 'process', nextStatus: 'กำลังดำเนินการ' };
+        if (!response.ok) {
+          throw new Error(`HTTP error ${response.status}`);
+        }
+
+        const data = await response.json();
+        console.log('📋 Workflows:', data);
+        setWorkflows(data.workflows || []);
+
+        // ✅ หา workflow ล่าสุดที่เสร็จสิ้น
+        if (data.workflows && data.workflows.length > 0) {
+          const lastWorkflow = data.workflows[data.workflows.length - 1];
+          if (lastWorkflow.completed_by_name) {
+            setCompletedByName(lastWorkflow.completed_by_name);
+          }
+        }
+
+      } catch (error) {
+        console.error('❌ Fetch workflows failed:', error);
       }
-
-      if (currentStatus === 'กำลังดำเนินการ' || currentStatus === 'in_progress') {
-        return { action: 'send_out', nextStatus: 'เอกสารส่งออก' };
-      }
-
-      if (currentStatus === 'เอกสารส่งออก' || currentStatus === 'sent_out') {
-        return { action: 'complete', nextStatus: 'เสร็จสิ้น' };
-      }
-
-      return null;
     };
 
-    const next = getNextAction();
-    if (!next) return;
+    fetchWorkflows();
+  }, [document.id]);
 
-    // ✅ payload ตรง schema backend 100%
-    const payload = {
-      document_id: document.id,
-      action: next.action,
-      comment: `เปลี่ยนสถานะเป็น ${next.nextStatus}`,
-      completed_by_name:
-        next.action === 'complete' ? completedByName : undefined
-    };
-
-    console.log('📤 Workflow payload:', payload);
-
-    const response = await fetch(`${API_URL}/workflows/`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify(payload)
-    });
-
-    // 🔐 401
-    if (response.status === 401) {
-      handleUnauthorized();
-      return;
-    }
-
-    // ❌ 422
-    if (response.status === 422) {
-      const errorText = await response.text();
-      console.error('❌ Validation Error (422):', errorText);
-      throw new Error(errorText);
-    }
-
-    if (!response.ok) {
-      throw new Error(`HTTP error ${response.status}`);
-    }
-
-    await response.json();
-
-    // ✅ update UI
-    setCurrentStatus(next.nextStatus);
-    await onUpdate(document.id, { status: next.nextStatus });
-
-    setTimeout(() => {
-      onClose();
-      window.location.reload();
-    }, 1000);
-
-  } catch (error) {
-    console.error('❌ Workflow update failed:', error);
-    alert('อัพเดทสถานะล้มเหลว: ' + error.message);
-  } finally {
-    setIsLoading(false);
-  }
-};
-
-
-  // ✅ ฟังก์ชันบันทึกการแก้ไข
-  const handleSave = async () => {
-    console.log('💾 กำลังบันทึก:', editData);
+  /**
+   * ✅ ฟังก์ชันอัพเดทสถานะผ่าน workflow API
+   */
+  const handleUpdateWorkflow = async () => {
     setIsLoading(true);
+
     try {
       const headers = getAuthHeaders();
-      
-      // ใช้ POST /api/v1/workflows/ เพื่ออัพเดท
+
+      // ✅ map สถานะปัจจุบัน → action
+      const getNextAction = () => {
+        if (currentStatus === 'รับแล้ว' || currentStatus === 'processed' || currentStatus === 'incoming') {
+          return { action: 'process', nextStatus: 'กำลังดำเนินการ' };
+        }
+
+        if (currentStatus === 'กำลังดำเนินการ' || currentStatus === 'in_progress') {
+          return { action: 'send_out', nextStatus: 'เอกสารส่งออก' };
+        }
+
+        if (currentStatus === 'เอกสารส่งออก' || currentStatus === 'sent_out') {
+          return { action: 'complete', nextStatus: 'เสร็จสิ้น' };
+        }
+
+        return null;
+      };
+
+      const next = getNextAction();
+      if (!next) return;
+
+      // ✅ Validation: ถ้าจะทำให้เสร็จสิ้น ต้องกรอกชื่อ
+      if (next.action === 'complete' && !completedByName.trim()) {
+        alert('⚠️ กรุณากรอกชื่อผู้ดำเนินการให้เสร็จสิ้น');
+        setIsLoading(false);
+        return;
+      }
+
+      // ✅ payload ตรง schema backend 100%
       const payload = {
         document_id: document.id,
-        title: editData.title,
-        from_department: editData.from,
-        to_department: editData.to,
-        document_date: editData.date,
-        status: editData.status,
-        priority: editData.priority,
-        subject: editData.subject,
-        department: editData.department,
-        document_number: editData.documentNo,
-        completed_by_name: editData.completed_by_name
+        action: next.action,
+        comment: `เปลี่ยนสถานะเป็น ${next.nextStatus}`,
+        completed_by_name: completedByName.trim() || undefined
       };
-      
-      const url = `${API_URL}/workflows/`;
-      console.log('📤 POST to', url, 'with:', payload);
-      
-      const response = await fetch(url, {
+
+      console.log('📤 Workflow payload:', payload);
+
+      const response = await fetch(`${API_URL}/workflows/`, {
         method: 'POST',
-        headers: headers,
+        headers,
         body: JSON.stringify(payload)
       });
 
+      // 🔐 401
       if (response.status === 401) {
-        console.error('❌ Unauthorized (401)');
         handleUnauthorized();
         return;
       }
 
+      // ❌ 422
+      if (response.status === 422) {
+        const errorData = await response.json();
+        console.error('❌ Validation Error (422):', errorData);
+        alert('ข้อมูลไม่ถูกต้อง: ' + JSON.stringify(errorData.detail));
+        setIsLoading(false);
+        return;
+      }
+
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        throw new Error(`HTTP error ${response.status}`);
       }
 
       const result = await response.json();
-      console.log('✅ Document updated via workflow:', result);
-      
-      await onUpdate(document.id, payload);
+      console.log('✅ Workflow created:', result);
+
+      // ✅ update UI
+      setCurrentStatus(next.nextStatus);
+      await onUpdate(document.id, { status: next.nextStatus });
+
+      // ✅ Reload workflows
+      const workflowsResponse = await fetch(`${API_URL}/workflows/document/${document.id}`, {
+        headers
+      });
+      if (workflowsResponse.ok) {
+        const workflowsData = await workflowsResponse.json();
+        setWorkflows(workflowsData.workflows || []);
+      }
+
+      alert(`✅ อัพเดทสถานะเป็น "${next.nextStatus}" สำเร็จ`);
+
+      setTimeout(() => {
+        onClose();
+        window.location.reload();
+      }, 1000);
+
+    } catch (error) {
+      console.error('❌ Workflow update failed:', error);
+      alert('อัพเดทสถานะล้มเหลว: ' + error.message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  /**
+   * ✅ ฟังก์ชันบันทึกการแก้ไข (ไม่ใช้ workflow)
+   */
+  const handleSave = async () => {
+    console.log('💾 กำลังบันทึก:', editData);
+    setIsLoading(true);
+    try {
+      // แก้ไขข้อมูลเอกสารโดยตรง (ไม่ผ่าน workflow)
+      await onUpdate(document.id, editData);
       setIsEditing(false);
+      alert('✅ บันทึกข้อมูลสำเร็จ');
       
     } catch (error) {
       console.error('❌ บันทึกล้มเหลว:', error);
@@ -212,7 +239,9 @@ const handleUpdateWorkflow = async () => {
     }
   };
 
-  // ✅ ฟังก์ชันยกเลิก
+  /**
+   * ✅ ฟังก์ชันยกเลิก
+   */
   const handleCancel = () => {
     setEditData({
       title: normalizedDoc.title || '',
@@ -223,8 +252,7 @@ const handleUpdateWorkflow = async () => {
       priority: normalizedDoc.priority || 'ปกติ',
       subject: normalizedDoc.subject || '',
       department: normalizedDoc.department || '',
-      documentNo: normalizedDoc.documentNo || '',
-      completed_by_name: normalizedDoc.completed_by_name || ''
+      documentNo: normalizedDoc.documentNo || ''
     });
     setIsEditing(false);
   };
@@ -233,6 +261,7 @@ const handleUpdateWorkflow = async () => {
     switch(status) {
       case 'รับแล้ว': 
       case 'processed': 
+      case 'incoming':
         return 'bg-gradient-to-r from-blue-500 to-cyan-500 text-white';
       case 'รอดำเนินการ': 
       case 'pending':
@@ -241,7 +270,11 @@ const handleUpdateWorkflow = async () => {
       case 'completed':
         return 'bg-gradient-to-r from-emerald-500 to-teal-500 text-white';
       case 'กำลังดำเนินการ':
+      case 'in_progress':
         return 'bg-gradient-to-r from-blue-400 to-indigo-400 text-white';
+      case 'เอกสารส่งออก':
+      case 'sent_out':
+        return 'bg-gradient-to-r from-purple-400 to-pink-400 text-white';
       default: 
         return 'bg-gray-200 text-gray-800';
     }
@@ -266,9 +299,11 @@ const handleUpdateWorkflow = async () => {
     }
   };
 
-  // ✅ ฟังก์ชันแสดงข้อความปุ่มตามขั้น
+  /**
+   * ✅ ฟังก์ชันแสดงข้อความปุ่มตามขั้น
+   */
   const getButtonText = () => {
-    if (currentStatus === 'รับแล้ว' || currentStatus === 'incoming') {
+    if (currentStatus === 'รับแล้ว' || currentStatus === 'processed' || currentStatus === 'incoming') {
       return '→ ส่งไปดำเนินการ';
     } else if (currentStatus === 'กำลังดำเนินการ' || currentStatus === 'in_progress') {
       return '→ ส่งออก';
@@ -279,46 +314,49 @@ const handleUpdateWorkflow = async () => {
     }
   };
 
-  // ✅ ฟังก์ชันสร้าง timeline steps
+  /**
+   * ✅ ฟังก์ชันสร้าง timeline steps จาก workflows
+   */
   const getTimelineSteps = () => {
-    return [
-      { 
-        step: 1,
-        status: 'เอกสารรับเข้า', 
-        time: normalizedDoc.created_at ? new Date(normalizedDoc.created_at).toLocaleString('th-TH') : '2025-12-19T06:32:39',
-        color: 'green', 
-        active: true 
-      },
-      { 
-        step: 2,
-        status: 'กำลังดำเนินการ', 
-        time: (currentStatus === 'กำลังดำเนินการ' || currentStatus === 'in_progress') 
-          ? new Date().toLocaleString('th-TH') 
+    const steps = [];
+
+    // Step 1: เอกสารรับเข้า (always active)
+    steps.push({
+      step: 1,
+      status: 'เอกสารรับเข้า',
+      time: normalizedDoc.created_at 
+        ? new Date(normalizedDoc.created_at).toLocaleString('th-TH')
+        : '',
+      color: 'green',
+      active: true,
+      completedBy: document.creator_username || null
+    });
+
+    // ✅ เพิ่ม workflows ที่มีจาก API
+    workflows.forEach((workflow, idx) => {
+      steps.push({
+        step: idx + 2,
+        status: workflow.action === 'process' 
+          ? 'กำลังดำเนินการ'
+          : workflow.action === 'send_out'
+          ? 'เอกสารส่งออก'
+          : workflow.action === 'complete'
+          ? 'เสร็จสิ้น'
+          : workflow.action,
+        time: workflow.timestamp 
+          ? new Date(workflow.timestamp).toLocaleString('th-TH')
           : '',
-        color: 'blue', 
-        active: currentStatus === 'กำลังดำเนินการ' || currentStatus === 'in_progress' || currentStatus === 'เอกสารส่งออก' || currentStatus === 'sent_out' || currentStatus === 'เสร็จสิ้น' || currentStatus === 'completed'
-      },
-      { 
-        step: 3,
-        status: 'เอกสารส่งออก', 
-        time: (currentStatus === 'เอกสารส่งออก' || currentStatus === 'sent_out') 
-          ? new Date().toLocaleString('th-TH') 
-          : '',
-        color: 'orange', 
-        active: currentStatus === 'เอกสารส่งออก' || currentStatus === 'sent_out' || currentStatus === 'เสร็จสิ้น' || currentStatus === 'completed'
-      },
-      { 
-        step: 4,
-        status: 'เสร็จสิ้น', 
-        time: (currentStatus === 'เสร็จสิ้น' || currentStatus === 'completed') 
-          ? new Date().toLocaleString('th-TH') 
-          : '',
-        color: 'purple', 
-        active: currentStatus === 'เสร็จสิ้น' || currentStatus === 'completed',
-        name: completedByName,
-        showName: completedByName || currentStatus === 'เสร็จสิ้น' || currentStatus === 'completed'
-      }
-    ];
+        color: workflow.action === 'complete' 
+          ? 'purple'
+          : workflow.action === 'send_out'
+          ? 'orange'
+          : 'blue',
+        active: true,
+        completedBy: workflow.completed_by_name || workflow.username
+      });
+    });
+
+    return steps;
   };
 
   return (
@@ -352,6 +390,7 @@ const handleUpdateWorkflow = async () => {
                     <option value="รับแล้ว">รับแล้ว</option>
                     <option value="รอดำเนินการ">รอดำเนินการ</option>
                     <option value="กำลังดำเนินการ">กำลังดำเนินการ</option>
+                    <option value="เอกสารส่งออก">เอกสารส่งออก</option>
                     <option value="เสร็จสิ้น">เสร็จสิ้น</option>
                   </select>
                 ) : (
@@ -488,19 +527,23 @@ const handleUpdateWorkflow = async () => {
           </div>
 
           {/* ✅ Input ชื่อคนเมื่อเสร็จสิ้น */}
-          {currentStatus === 'เอกสารส่งออก' || currentStatus === 'sent_out' ? (
-            <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-2xl p-5 border-2 border-purple-100">
+          {(currentStatus === 'เอกสารส่งออก' || currentStatus === 'sent_out') && !isEditing ? (
+            <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-2xl p-5 border-2 border-purple-200">
               <p className="text-sm text-gray-600 mb-2 flex items-center gap-2">
                 <User className="w-4 h-4" />
-                ชื่อผู้ดำเนินการให้เสร็จสิ้น
+                ชื่อผู้ดำเนินการให้เสร็จสิ้น <span className="text-red-500">*</span>
               </p>
               <input
                 type="text"
                 value={completedByName}
                 onChange={(e) => setCompletedByName(e.target.value)}
                 className="font-bold text-gray-900 text-lg w-full px-3 py-2 border-2 border-purple-300 rounded-lg focus:border-purple-500"
-                placeholder="กรอกชื่อผู้ดำเนินการ"
+                placeholder="กรอกชื่อผู้ดำเนินการ (จำเป็น)"
+                required
               />
+              {!completedByName.trim() && (
+                <p className="text-xs text-red-500 mt-1">⚠️ กรุณากรอกชื่อก่อนกดปุ่มทำเสร็จสิ้น</p>
+              )}
             </div>
           ) : null}
 
@@ -528,12 +571,11 @@ const handleUpdateWorkflow = async () => {
                     <div className="flex-1 pb-4 border-l-2 border-dashed border-gray-200 last:border-0 pl-6 -ml-1.5">
                       <div className="flex items-center gap-2">
                         <p className={`font-semibold ${step.active ? 'text-gray-900' : 'text-gray-400'}`}>
-                          Step {step.step}: {step.status}
+                          {step.status}
                         </p>
-                        {step.active && <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded">ปัจจุบัน</span>}
                       </div>
-                      {step.time && <p className="text-sm text-gray-500 mt-1">{step.time}</p>}
-                      {step.showName && step.name && <p className="text-sm text-purple-600 font-semibold mt-1">👤 ผู้ดำเนินการ: {step.name}</p>}
+                      {step.time && <p className="text-sm text-gray-500 mt-1">📅 {step.time}</p>}
+                      {step.completedBy && <p className="text-sm text-blue-600 font-semibold mt-1">👤 ผู้ดำเนินการ: {step.completedBy}</p>}
                     </div>
                   </div>
                 ))}
@@ -566,17 +608,33 @@ const handleUpdateWorkflow = async () => {
             <>
               {/* ✅ โหมดปกติ */}
               <button 
-                onClick={onClose}
-                className="flex-1 px-6 py-3 border-2 border-gray-300 text-gray-700 rounded-xl hover:bg-white transition-all font-medium"
+                onClick={() => {
+                  console.log('✏️ เปิดโหมดแก้ไข');
+                  setIsEditing(true);
+                }}
+                className="flex-1 px-6 py-3 border-2 border-blue-300 text-blue-600 rounded-xl hover:bg-blue-50 transition-all font-medium flex items-center justify-center gap-2"
               >
-                ยกเลิก
+                <Edit className="w-4 h-4" />
+                แก้ไขเอกสาร
               </button>
               <button 
                 onClick={handleUpdateWorkflow}
-                disabled={isLoading || currentStatus === 'เสร็จสิ้น' || currentStatus === 'completed' || (currentStatus === 'เอกสารส่งออก' && !completedByName)}
+                disabled={
+                  isLoading || 
+                  currentStatus === 'เสร็จสิ้น' || 
+                  currentStatus === 'completed' || 
+                  ((currentStatus === 'เอกสารส่งออก' || currentStatus === 'sent_out') && !completedByName.trim())
+                }
                 className="flex-1 px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl hover:shadow-xl hover:shadow-blue-500/30 transition-all font-medium disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {isLoading ? 'กำลังอัพเดท...' : currentStatus === 'เสร็จสิ้น' || currentStatus === 'completed' ? '✓ เสร็จสิ้นแล้ว' : (currentStatus === 'เอกสารส่งออก' && !completedByName) ? 'กรุณากรอกชื่อผู้ดำเนินการ' : getButtonText()}
+                {isLoading 
+                  ? 'กำลังอัพเดท...' 
+                  : currentStatus === 'เสร็จสิ้น' || currentStatus === 'completed' 
+                    ? '✓ เสร็จสิ้นแล้ว' 
+                    : ((currentStatus === 'เอกสารส่งออก' || currentStatus === 'sent_out') && !completedByName.trim())
+                      ? '⚠️ กรุณากรอกชื่อผู้ดำเนินการ'
+                      : getButtonText()
+                }
               </button>
             </>
           )}
