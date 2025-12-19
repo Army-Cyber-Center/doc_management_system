@@ -136,7 +136,7 @@ function DocumentForm({ onClose, onSubmit }) {
   const [rotation, setRotation] = useState(0);
   const [flipHorizontal, setFlipHorizontal] = useState(false);
   const [flipVertical, setFlipVertical] = useState(false);
-  const [aspect, setAspect] = useState(4 / 3);
+  const [aspect, setAspect] = useState(null);
   
   const [progress, setProgress] = useState(0);
   const [progressMessage, setProgressMessage] = useState('');
@@ -338,245 +338,275 @@ function DocumentForm({ onClose, onSubmit }) {
     }
   };
 
-  // ✅ ถ้ากำลัง crop อยู่ แสดงเฉพาะ Crop Modal
-  if (cropModalOpen) {
-    return (
-      <Modal
-        isOpen={cropModalOpen}
-        onRequestClose={() => {
-          setCropModalOpen(false);
-          setTempImage(null);
-          setRotation(0);
-          setFlipHorizontal(false);
-          setFlipVertical(false);
-          setAspect(4 / 3);
-          setShowFileOptions(true);
-        }}
-        className="fixed inset-0 flex items-center justify-center p-4"
-        overlayClassName="fixed inset-0 bg-black/90 z-[9999]"
-      >
-        <div className="bg-white rounded-2xl w-full max-w-4xl max-h-[95vh] overflow-hidden shadow-2xl flex flex-col">
-          {/* ✅ Header */}
-          <div className="p-4 border-b flex justify-between items-center bg-gradient-to-r from-blue-600 to-indigo-600">
-            <h3 className="text-lg font-bold text-white">ปรับแต่งภาพ</h3>
+
+if (cropModalOpen) {
+  return (
+    <Modal
+      isOpen={cropModalOpen}
+      onRequestClose={() => {
+        setCropModalOpen(false);
+        setTempImage(null);
+        setRotation(0);
+        setFlipHorizontal(false);
+        setFlipVertical(false);
+        setAspect(null);
+        setShowFileOptions(true);
+      }}
+      className="fixed inset-0 flex items-center justify-center p-4"
+      overlayClassName="fixed inset-0 bg-black/90 z-[9999]"
+    >
+      <div className="bg-white rounded-2xl w-full max-w-4xl max-h-[95vh] overflow-hidden shadow-2xl flex flex-col">
+        {/* Header */}
+        <div className="p-4 border-b flex justify-between items-center bg-gradient-to-r from-blue-600 to-indigo-600">
+          <h3 className="text-lg font-bold text-white">ปรับแต่งภาพ</h3>
+          <button
+            onClick={() => {
+              setCropModalOpen(false);
+              setTempImage(null);
+              setRotation(0);
+              setFlipHorizontal(false);
+              setFlipVertical(false);
+              setAspect(null);
+              setShowFileOptions(true);
+            }}
+            className="p-2 hover:bg-white/20 rounded-lg transition-colors"
+          >
+            <X className="w-5 h-5 text-white" />
+          </button>
+        </div>
+
+        {/* ✅ Cropper Area - สี่เหลี่ยม + grid */}
+        <div className="relative bg-gray-900 flex-1" style={{ minHeight: '400px' }}>
+          {tempImage && (
+            <Cropper
+              image={tempImage}
+              crop={crop}
+              zoom={zoom}
+              aspect={aspect}
+              rotation={rotation}
+              onCropChange={setCrop}
+              onZoomChange={setZoom}
+              onCropComplete={(_, croppedAreaPixels) => setCroppedAreaPixels(croppedAreaPixels)}
+              // ✅ เพิ่ม props เหล่านี้
+              cropShape="rect"              // ✅ เปลี่ยนเป็นสี่เหลี่ยม (แทน "round")
+              showGrid={true}               // ✅ แสดง grid
+              objectFit="contain"           // ✅ แสดงภาพเต็ม
+              style={{
+                containerStyle: {
+                  backgroundColor: '#000'
+                },
+                cropAreaStyle: {
+                  border: '2px solid #3b82f6',  // สีน้ำเงิน
+                  color: 'rgba(59, 130, 246, 0.3)'  // สีพื้นหลังโปร่งแสง
+                }
+              }}
+            />
+          )}
+        </div>
+
+        {/* Controls */}
+        <div className="p-6 border-t bg-gray-50 space-y-6 max-h-[400px] overflow-y-auto">
+          
+          // ในส่วน Aspect Ratio buttons แก้เป็น:
+          <div>
+            <label className="text-sm font-semibold text-gray-700 mb-3 block">อัตราส่วน</label>
+            <div className="grid grid-cols-6 gap-2">
+              {/* ✅ เพิ่มปุ่ม "อิสระ" */}
+              <button
+                type="button"
+                onClick={() => setAspect(null)} // ✅ null = ปรับได้อิสระ
+                className={`px-3 py-2 rounded-lg text-sm font-medium transition-all ${
+                  aspect === null
+                    ? 'bg-green-600 text-white shadow-lg'
+                    : 'bg-white border-2 border-gray-200 text-gray-700 hover:border-blue-400'
+                }`}
+              >
+                ✨ อิสระ
+              </button>
+              
+              <button
+                type="button"
+                onClick={() => setAspect(16 / 9)}
+                className={`px-3 py-2 rounded-lg text-sm font-medium transition-all ${
+                  aspect === 16 / 9
+                    ? 'bg-blue-600 text-white shadow-lg'
+                    : 'bg-white border-2 border-gray-200 text-gray-700 hover:border-blue-400'
+                }`}
+              >
+                16:9
+              </button>
+              
+              <button
+                type="button"
+                onClick={() => setAspect(4 / 3)}
+                className={`px-3 py-2 rounded-lg text-sm font-medium transition-all ${
+                  aspect === 4 / 3
+                    ? 'bg-blue-600 text-white shadow-lg'
+                    : 'bg-white border-2 border-gray-200 text-gray-700 hover:border-blue-400'
+                }`}
+              >
+                4:3
+              </button>
+              
+              <button
+                type="button"
+                onClick={() => setAspect(1)}
+                className={`px-3 py-2 rounded-lg text-sm font-medium transition-all ${
+                  aspect === 1
+                    ? 'bg-blue-600 text-white shadow-lg'
+                    : 'bg-white border-2 border-gray-200 text-gray-700 hover:border-blue-400'
+                }`}
+              >
+                1:1
+              </button>
+              
+              <button
+                type="button"
+                onClick={() => setAspect(3 / 4)}
+                className={`px-3 py-2 rounded-lg text-sm font-medium transition-all ${
+                  aspect === 3 / 4
+                    ? 'bg-blue-600 text-white shadow-lg'
+                    : 'bg-white border-2 border-gray-200 text-gray-700 hover:border-blue-400'
+                }`}
+              >
+                3:4
+              </button>
+              
+              <button
+                type="button"
+                onClick={() => setAspect(9 / 16)}
+                className={`px-3 py-2 rounded-lg text-sm font-medium transition-all ${
+                  aspect === 9 / 16
+                    ? 'bg-blue-600 text-white shadow-lg'
+                    : 'bg-white border-2 border-gray-200 text-gray-700 hover:border-blue-400'
+                }`}
+              >
+                9:16
+              </button>
+            </div>
+          </div>
+
+          {/* Zoom */}
+          <div>
+            <div className="flex justify-between items-center mb-2">
+              <label className="text-sm font-semibold text-gray-700">ซูม</label>
+              <span className="text-sm text-gray-600 font-mono">{zoom.toFixed(1)}x</span>
+            </div>
+            <input
+              type="range"
+              min={1}
+              max={3}
+              step={0.1}
+              value={zoom}
+              onChange={(e) => setZoom(parseFloat(e.target.value))}
+              className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
+            />
+          </div>
+
+          {/* Rotation */}
+          <div>
+            <div className="flex justify-between items-center mb-2">
+              <label className="text-sm font-semibold text-gray-700">หมุน</label>
+              <span className="text-sm text-gray-600 font-mono">{rotation}°</span>
+            </div>
+            <div className="flex gap-2 items-center">
+              <input
+                type="range"
+                min={0}
+                max={360}
+                step={1}
+                value={rotation}
+                onChange={(e) => setRotation(parseInt(e.target.value))}
+                className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
+              />
+              <button
+                type="button"
+                onClick={() => setRotation((rotation + 90) % 360)}
+                className="px-4 py-2 bg-white border-2 border-gray-200 rounded-lg hover:border-blue-400 transition-all text-sm font-medium"
+              >
+                🔄 90°
+              </button>
+            </div>
+          </div>
+
+          {/* Flip */}
+          <div>
+            <label className="text-sm font-semibold text-gray-700 mb-3 block">พลิก</label>
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => setFlipHorizontal(!flipHorizontal)}
+                className={`flex-1 px-4 py-3 rounded-lg font-medium transition-all ${
+                  flipHorizontal
+                    ? 'bg-blue-600 text-white shadow-lg'
+                    : 'bg-white border-2 border-gray-200 text-gray-700 hover:border-blue-400'
+                }`}
+              >
+                ↔️ แนวนอน
+              </button>
+              <button
+                type="button"
+                onClick={() => setFlipVertical(!flipVertical)}
+                className={`flex-1 px-4 py-3 rounded-lg font-medium transition-all ${
+                  flipVertical
+                    ? 'bg-blue-600 text-white shadow-lg'
+                    : 'bg-white border-2 border-gray-200 text-gray-700 hover:border-blue-400'
+                }`}
+              >
+                ↕️ แนวตั้ง
+              </button>
+            </div>
+          </div>
+
+          {/* Reset */}
+          <div>
             <button
+              type="button"
+              onClick={() => {
+                setZoom(1);
+                setRotation(0);
+                setFlipHorizontal(false);
+                setFlipVertical(false);
+                setAspect(null); // ✅ รีเซ็ตเป็น "อิสระ"
+                setCrop({ x: 0, y: 0 });
+              }}
+              className="w-full px-4 py-2 bg-gray-100 border-2 border-gray-300 text-gray-700 rounded-lg hover:bg-gray-200 transition-all text-sm font-medium"
+            >
+              🔄 รีเซ็ตทั้งหมด
+            </button>
+          </div>
+
+          {/* Action Buttons */}
+          <div className="flex gap-3 pt-2">
+            <button
+              type="button"
               onClick={() => {
                 setCropModalOpen(false);
                 setTempImage(null);
                 setRotation(0);
                 setFlipHorizontal(false);
                 setFlipVertical(false);
-                setAspect(4 / 3);
+                setAspect(null);
                 setShowFileOptions(true);
               }}
-              className="p-2 hover:bg-white/20 rounded-lg transition-colors"
+              className="flex-1 px-6 py-3 border-2 border-gray-300 text-gray-700 rounded-xl font-semibold hover:bg-gray-50 transition-all"
             >
-              <X className="w-5 h-5 text-white" />
+              ยกเลิก
+            </button>
+            <button
+              type="button"
+              onClick={handleCropComplete}
+              className="flex-1 px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl font-semibold hover:shadow-lg transition-all flex items-center justify-center gap-2"
+            >
+              <CheckCircle className="w-5 h-5" />
+              ใช้ภาพนี้
             </button>
           </div>
-
-          {/* ✅ Cropper Area */}
-          <div className="relative bg-gray-900 flex-1" style={{ minHeight: '400px' }}>
-            {tempImage && (
-              <Cropper
-                image={tempImage}
-                crop={crop}
-                zoom={zoom}
-                aspect={aspect}
-                rotation={rotation}
-                onCropChange={setCrop}
-                onZoomChange={setZoom}
-                onCropComplete={(_, croppedAreaPixels) => setCroppedAreaPixels(croppedAreaPixels)}
-              />
-            )}
-          </div>
-
-          {/* ✅ Controls */}
-          <div className="p-6 border-t bg-gray-50 space-y-6 max-h-[400px] overflow-y-auto">
-            
-            {/* Aspect Ratio */}
-            <div>
-              <label className="text-sm font-semibold text-gray-700 mb-3 block">อัตราส่วน</label>
-              <div className="grid grid-cols-5 gap-2">
-                <button
-                  type="button"
-                  onClick={() => setAspect(16 / 9)}
-                  className={`px-3 py-2 rounded-lg text-sm font-medium transition-all ${
-                    aspect === 16 / 9
-                      ? 'bg-blue-600 text-white shadow-lg'
-                      : 'bg-white border-2 border-gray-200 text-gray-700 hover:border-blue-400'
-                  }`}
-                >
-                  16:9
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setAspect(4 / 3)}
-                  className={`px-3 py-2 rounded-lg text-sm font-medium transition-all ${
-                    aspect === 4 / 3
-                      ? 'bg-blue-600 text-white shadow-lg'
-                      : 'bg-white border-2 border-gray-200 text-gray-700 hover:border-blue-400'
-                  }`}
-                >
-                  4:3
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setAspect(1)}
-                  className={`px-3 py-2 rounded-lg text-sm font-medium transition-all ${
-                    aspect === 1
-                      ? 'bg-blue-600 text-white shadow-lg'
-                      : 'bg-white border-2 border-gray-200 text-gray-700 hover:border-blue-400'
-                  }`}
-                >
-                  1:1
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setAspect(3 / 4)}
-                  className={`px-3 py-2 rounded-lg text-sm font-medium transition-all ${
-                    aspect === 3 / 4
-                      ? 'bg-blue-600 text-white shadow-lg'
-                      : 'bg-white border-2 border-gray-200 text-gray-700 hover:border-blue-400'
-                  }`}
-                >
-                  3:4
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setAspect(9 / 16)}
-                  className={`px-3 py-2 rounded-lg text-sm font-medium transition-all ${
-                    aspect === 9 / 16
-                      ? 'bg-blue-600 text-white shadow-lg'
-                      : 'bg-white border-2 border-gray-200 text-gray-700 hover:border-blue-400'
-                  }`}
-                >
-                  9:16
-                </button>
-              </div>
-            </div>
-
-            {/* Zoom */}
-            <div>
-              <div className="flex justify-between items-center mb-2">
-                <label className="text-sm font-semibold text-gray-700">ซูม</label>
-                <span className="text-sm text-gray-600 font-mono">{zoom.toFixed(1)}x</span>
-              </div>
-              <input
-                type="range"
-                min={1}
-                max={3}
-                step={0.1}
-                value={zoom}
-                onChange={(e) => setZoom(parseFloat(e.target.value))}
-                className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
-              />
-            </div>
-
-            {/* Rotation */}
-            <div>
-              <div className="flex justify-between items-center mb-2">
-                <label className="text-sm font-semibold text-gray-700">หมุน</label>
-                <span className="text-sm text-gray-600 font-mono">{rotation}°</span>
-              </div>
-              <div className="flex gap-2 items-center">
-                <input
-                  type="range"
-                  min={0}
-                  max={360}
-                  step={1}
-                  value={rotation}
-                  onChange={(e) => setRotation(parseInt(e.target.value))}
-                  className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
-                />
-                <button
-                  type="button"
-                  onClick={() => setRotation((rotation + 90) % 360)}
-                  className="px-4 py-2 bg-white border-2 border-gray-200 rounded-lg hover:border-blue-400 transition-all text-sm font-medium"
-                >
-                  🔄 90°
-                </button>
-              </div>
-            </div>
-
-            {/* Flip */}
-            <div>
-              <label className="text-sm font-semibold text-gray-700 mb-3 block">พลิก</label>
-              <div className="flex gap-3">
-                <button
-                  type="button"
-                  onClick={() => setFlipHorizontal(!flipHorizontal)}
-                  className={`flex-1 px-4 py-3 rounded-lg font-medium transition-all ${
-                    flipHorizontal
-                      ? 'bg-blue-600 text-white shadow-lg'
-                      : 'bg-white border-2 border-gray-200 text-gray-700 hover:border-blue-400'
-                  }`}
-                >
-                  ↔️ แนวนอน
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setFlipVertical(!flipVertical)}
-                  className={`flex-1 px-4 py-3 rounded-lg font-medium transition-all ${
-                    flipVertical
-                      ? 'bg-blue-600 text-white shadow-lg'
-                      : 'bg-white border-2 border-gray-200 text-gray-700 hover:border-blue-400'
-                  }`}
-                >
-                  ↕️ แนวตั้ง
-                </button>
-              </div>
-            </div>
-
-            {/* Reset */}
-            <div>
-              <button
-                type="button"
-                onClick={() => {
-                  setZoom(1);
-                  setRotation(0);
-                  setFlipHorizontal(false);
-                  setFlipVertical(false);
-                  setAspect(4 / 3);
-                  setCrop({ x: 0, y: 0 });
-                }}
-                className="w-full px-4 py-2 bg-gray-100 border-2 border-gray-300 text-gray-700 rounded-lg hover:bg-gray-200 transition-all text-sm font-medium"
-              >
-                🔄 รีเซ็ตทั้งหมด
-              </button>
-            </div>
-
-            {/* Action Buttons */}
-            <div className="flex gap-3 pt-2">
-              <button
-                type="button"
-                onClick={() => {
-                  setCropModalOpen(false);
-                  setTempImage(null);
-                  setRotation(0);
-                  setFlipHorizontal(false);
-                  setFlipVertical(false);
-                  setAspect(4 / 3);
-                  setShowFileOptions(true);
-                }}
-                className="flex-1 px-6 py-3 border-2 border-gray-300 text-gray-700 rounded-xl font-semibold hover:bg-gray-50 transition-all"
-              >
-                ยกเลิก
-              </button>
-              <button
-                type="button"
-                onClick={handleCropComplete}
-                className="flex-1 px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl font-semibold hover:shadow-lg transition-all flex items-center justify-center gap-2"
-              >
-                <CheckCircle className="w-5 h-5" />
-                ใช้ภาพนี้
-              </button>
-            </div>
-          </div>
         </div>
-      </Modal>
-    );
-  }
+      </div>
+    </Modal>
+  );
+}
 
   return (
     <>
