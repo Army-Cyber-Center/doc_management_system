@@ -69,7 +69,7 @@ const parseOCRText = (extractedText, parsedFields = {}) => {
   return result;
 };
 
-// ✅ waitForDocument function - รองรับทั้ง 2 format
+// ✅ waitForDocument function - รองรับ API จริง
 const waitForDocument = async (
   getDocument,
   id,
@@ -111,10 +111,8 @@ const waitForDocument = async (
       console.log(`⏳ [${elapsed}s] กำลังรอ OCR... (ครั้งที่ ${attempts}/${maxAttempts})`);
       const data = await getDocument(id);
 
-      // ✅ รองรับทั้ง 2 format
-      const hasOCRData = 
-        data?.ocr_data?.extracted_text ||  // format เก่า
-        data?.extracted_text;               // format ใหม่
+      // ✅ เช็คว่ามี ocr_data.text หรือไม่
+      const hasOCRData = data?.ocr_data?.text && data?.ocr_data?.text.length > 0;
 
       if (hasOCRData) {
         console.log('✅ OCR เสร็จแล้ว! Data:', data);
@@ -206,17 +204,11 @@ function DocumentForm({ onClose, onSubmit }) {
         setProgressMessage('✅ ประมวลผลสำเร็จ!');
         console.log('✅ ดึงข้อมูลสำเร็จ! Full data:', data);
 
-        // ✅ รองรับทั้ง 2 format
-        const rawText = 
-          data.ocr_data?.extracted_text ||
-          data.extracted_text ||
-          '';
+        // ✅ ดึง raw text จาก API จริง
+        const rawText = data.ocr_data?.text || '';
 
-        // ✅ ดึง parsed_fields ถ้ามี
-        const parsedFieldsFromAPI = 
-          data.ocr_data?.extracted_fields?.parsed_fields ||
-          data.extracted_fields?.parsed_fields ||
-          {};
+        // ✅ ดึง parsed_fields จาก API จริง
+        const parsedFieldsFromAPI = data.ocr_data?.parsed_fields || {};
 
         console.log('📝 Raw text:', rawText);
         console.log('📋 Parsed fields from API:', parsedFieldsFromAPI);
@@ -350,34 +342,6 @@ function DocumentForm({ onClose, onSubmit }) {
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
-  };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-
-    if (!formData.file) {
-      alert('กรุณาเลือกไฟล์');
-      return;
-    }
-
-    try {
-      const submitData = new FormData();
-      submitData.append('file', formData.file);
-      submitData.append('title', formData.title);
-      submitData.append('type', formData.type);
-      submitData.append('from', formData.from);
-      submitData.append('to', formData.to);
-      submitData.append('priority', formData.priority);
-      submitData.append('department', formData.department);
-      submitData.append('documentNo', formData.documentNo);
-      submitData.append('date', formData.date);
-      submitData.append('subject', formData.subject);
-
-      await onSubmit(submitData);
-      onClose();
-    } catch (err) {
-      alert('บันทึกข้อมูลไม่สำเร็จ: ' + err.message);
-    }
   };
 
   // ✅ Crop Modal
@@ -745,7 +709,7 @@ function DocumentForm({ onClose, onSubmit }) {
 
             {/* Form */}
             {formData.file && !processing && (
-              <form onSubmit={handleSubmit} className="space-y-6">
+              <div className="space-y-6">
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-2">ประเภทเอกสาร</label>
                   <select
@@ -880,7 +844,7 @@ function DocumentForm({ onClose, onSubmit }) {
                     )}
                   </button>
                 </div>
-              </form>
+              </div>
             )}
           </div>
         </div>
