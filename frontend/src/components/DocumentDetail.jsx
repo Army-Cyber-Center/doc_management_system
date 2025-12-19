@@ -2,25 +2,63 @@ import React, { useState } from 'react';
 import { X, User, Calendar, Clock, FileText, Download, Edit, TrendingUp, Save } from 'lucide-react';
 
 function DocumentDetail({ document, onClose, onUpdate }) {
+  // ✅ Debug
+  console.log('🔍 DocumentDetail received:', document);
+  
+  // ✅ แปลง Backend data → Frontend format
+  const normalizedDoc = {
+    id: document.id,
+    title: document.title,
+    type: document.document_type,
+    
+    // ✅ ดึงจาก ocr_data.parsed_fields
+    from: document.ocr_data?.parsed_fields?.['ส่วนราชการ'] || document.from_department || '-',
+    to: document.to_user_id || document.to_department || '-',
+    date: document.ocr_data?.parsed_fields?.['วันที่'] || document.due_date || document.created_at?.split('T')[0] || '-',
+    documentNo: document.ocr_data?.parsed_fields?.['ที่'] || document.document_number || '-',
+    subject: document.ocr_data?.parsed_fields?.['เรื่อง'] || '-',
+    department: document.ocr_data?.parsed_fields?.['ส่วนราชการ'] || document.from_department || '-',
+    
+    priority: document.priority === 'normal' ? 'ปกติ' : document.priority,
+    status: document.status === 'processed' ? 'รับแล้ว' : document.status,
+    created_at: document.created_at,
+    file_path: document.file_path
+  };
+
+  console.log('✅ Normalized:', normalizedDoc);
+
   // ✅ เพิ่ม state สำหรับโหมดแก้ไข
   const [isEditing, setIsEditing] = useState(false);
   const [editData, setEditData] = useState({
-    title: document.title || '',
-    from: document.from || '',
-    to: document.to || '',
-    date: document.date || '',
-    status: document.status || 'รับแล้ว',
-    priority: document.priority || 'ปกติ',
-    subject: document.subject || '',
-    department: document.department || '',
-    documentNo: document.documentNo || document.document_no || ''
+    title: normalizedDoc.title || '',
+    from: normalizedDoc.from || '',
+    to: normalizedDoc.to || '',
+    date: normalizedDoc.date || '',
+    status: normalizedDoc.status || 'รับแล้ว',
+    priority: normalizedDoc.priority || 'ปกติ',
+    subject: normalizedDoc.subject || '',
+    department: normalizedDoc.department || '',
+    documentNo: normalizedDoc.documentNo || ''
   });
 
   // ✅ ฟังก์ชันบันทึกการแก้ไข
   const handleSave = async () => {
     console.log('💾 กำลังบันทึก:', editData);
     try {
-      await onUpdate(document.id || document.document_id, editData);
+      // แปลงกลับเป็น snake_case สำหรับ API
+      const apiData = {
+        title: editData.title,
+        from_department: editData.from,
+        to_department: editData.to,
+        document_date: editData.date,
+        status: editData.status === 'ปกติ' ? 'normal' : editData.status,
+        priority: editData.priority === 'ปกติ' ? 'normal' : editData.priority,
+        subject: editData.subject,
+        department: editData.department,
+        document_number: editData.documentNo
+      };
+      
+      await onUpdate(document.id, apiData);
       setIsEditing(false);
     } catch (error) {
       console.error('❌ บันทึกล้มเหลว:', error);
@@ -31,37 +69,53 @@ function DocumentDetail({ document, onClose, onUpdate }) {
   // ✅ ฟังก์ชันยกเลิก
   const handleCancel = () => {
     setEditData({
-      title: document.title || '',
-      from: document.from || '',
-      to: document.to || '',
-      date: document.date || '',
-      status: document.status || 'รับแล้ว',
-      priority: document.priority || 'ปกติ',
-      subject: document.subject || '',
-      department: document.department || '',
-      documentNo: document.documentNo || document.document_no || ''
+      title: normalizedDoc.title || '',
+      from: normalizedDoc.from || '',
+      to: normalizedDoc.to || '',
+      date: normalizedDoc.date || '',
+      status: normalizedDoc.status || 'รับแล้ว',
+      priority: normalizedDoc.priority || 'ปกติ',
+      subject: normalizedDoc.subject || '',
+      department: normalizedDoc.department || '',
+      documentNo: normalizedDoc.documentNo || ''
     });
     setIsEditing(false);
   };
   
   const getStatusColor = (status) => {
     switch(status) {
-      case 'รับแล้ว': return 'bg-gradient-to-r from-blue-500 to-cyan-500 text-white';
-      case 'รอดำเนินการ': return 'bg-gradient-to-r from-orange-400 to-amber-400 text-white';
-      case 'เสร็จสิ้น': return 'bg-gradient-to-r from-emerald-500 to-teal-500 text-white';
-      case 'ส่งแล้ว': return 'bg-gradient-to-r from-green-500 to-emerald-500 text-white';
-      case 'รอส่ง': return 'bg-gradient-to-r from-yellow-400 to-orange-400 text-white';
-      default: return 'bg-gray-200 text-gray-800';
+      case 'รับแล้ว': 
+      case 'processed': 
+        return 'bg-gradient-to-r from-blue-500 to-cyan-500 text-white';
+      case 'รอดำเนินการ': 
+      case 'pending':
+        return 'bg-gradient-to-r from-orange-400 to-amber-400 text-white';
+      case 'เสร็จสิ้น': 
+      case 'completed':
+        return 'bg-gradient-to-r from-emerald-500 to-teal-500 text-white';
+      case 'กำลังดำเนินการ':
+        return 'bg-gradient-to-r from-blue-400 to-indigo-400 text-white';
+      default: 
+        return 'bg-gray-200 text-gray-800';
     }
   };
 
   const getPriorityColor = (priority) => {
     switch(priority) {
-      case 'ด่วนที่สุด': return 'text-red-500';
-      case 'ด่วนมาก': return 'text-orange-500';
-      case 'ด่วน': return 'text-yellow-600';
-      case 'ปกติ': return 'text-green-500';
-      default: return 'text-gray-500';
+      case 'ด่วนที่สุด': 
+      case 'urgent':
+        return 'text-red-500';
+      case 'ด่วนมาก': 
+      case 'high':
+        return 'text-orange-500';
+      case 'ด่วน': 
+      case 'medium':
+        return 'text-yellow-600';
+      case 'ปกติ': 
+      case 'normal':
+        return 'text-green-500';
+      default: 
+        return 'text-gray-500';
     }
   };
 
@@ -82,7 +136,7 @@ function DocumentDetail({ document, onClose, onUpdate }) {
                   placeholder="ชื่อเอกสาร"
                 />
               ) : (
-                <h2 className="text-2xl font-bold text-gray-900 mb-2">{document.title || 'ไม่มีชื่อ'}</h2>
+                <h2 className="text-2xl font-bold text-gray-900 mb-2">{normalizedDoc.title || 'ไม่มีชื่อ'}</h2>
               )}
 
               <div className="flex gap-2 flex-wrap">
@@ -95,13 +149,12 @@ function DocumentDetail({ document, onClose, onUpdate }) {
                   >
                     <option value="รับแล้ว">รับแล้ว</option>
                     <option value="รอดำเนินการ">รอดำเนินการ</option>
+                    <option value="กำลังดำเนินการ">กำลังดำเนินการ</option>
                     <option value="เสร็จสิ้น">เสร็จสิ้น</option>
-                    <option value="ส่งแล้ว">ส่งแล้ว</option>
-                    <option value="รอส่ง">รอส่ง</option>
                   </select>
                 ) : (
-                  <span className={`px-3 py-1.5 rounded-xl text-sm font-medium shadow-sm ${getStatusColor(document.status || 'รับแล้ว')}`}>
-                    {document.status || 'รับแล้ว'}
+                  <span className={`px-3 py-1.5 rounded-xl text-sm font-medium shadow-sm ${getStatusColor(normalizedDoc.status)}`}>
+                    {normalizedDoc.status}
                   </span>
                 )}
 
@@ -118,8 +171,8 @@ function DocumentDetail({ document, onClose, onUpdate }) {
                     <option value="ด่วนที่สุด">ด่วนที่สุด</option>
                   </select>
                 ) : (
-                  <span className={`px-3 py-1.5 rounded-xl text-sm font-bold bg-white ${getPriorityColor(document.priority || 'ปกติ')}`}>
-                    ● ความสำคัญ {document.priority || 'ปกติ'}
+                  <span className={`px-3 py-1.5 rounded-xl text-sm font-bold bg-white ${getPriorityColor(normalizedDoc.priority)}`}>
+                    ● ความสำคัญ {normalizedDoc.priority}
                   </span>
                 )}
               </div>
@@ -140,7 +193,7 @@ function DocumentDetail({ document, onClose, onUpdate }) {
             <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl p-5 border-2 border-blue-100">
               <p className="text-sm text-gray-600 mb-2 flex items-center gap-2">
                 <User className="w-4 h-4" />
-                จาก
+                จาก / ส่วนราชการ
               </p>
               {isEditing ? (
                 <input
@@ -151,45 +204,7 @@ function DocumentDetail({ document, onClose, onUpdate }) {
                   placeholder="ผู้ส่ง/หน่วยงาน"
                 />
               ) : (
-                <p className="font-bold text-gray-900 text-lg">{document.from || '-'}</p>
-              )}
-            </div>
-
-            {/* To */}
-            <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-2xl p-5 border-2 border-green-100">
-              <p className="text-sm text-gray-600 mb-2 flex items-center gap-2">
-                <User className="w-4 h-4" />
-                ถึง
-              </p>
-              {isEditing ? (
-                <input
-                  type="text"
-                  value={editData.to}
-                  onChange={(e) => setEditData({ ...editData, to: e.target.value })}
-                  className="font-bold text-gray-900 text-lg w-full px-3 py-2 border-2 border-green-300 rounded-lg focus:border-green-500"
-                  placeholder="ผู้รับ/หน่วยงาน"
-                />
-              ) : (
-                <p className="font-bold text-gray-900 text-lg">{document.to || '-'}</p>
-              )}
-            </div>
-
-            {/* Date */}
-            <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-2xl p-5 border-2 border-purple-100">
-              <p className="text-sm text-gray-600 mb-2 flex items-center gap-2">
-                <Calendar className="w-4 h-4" />
-                วันที่
-              </p>
-              {isEditing ? (
-                <input
-                  type="text"
-                  value={editData.date}
-                  onChange={(e) => setEditData({ ...editData, date: e.target.value })}
-                  className="font-bold text-gray-900 text-lg w-full px-3 py-2 border-2 border-purple-300 rounded-lg focus:border-purple-500"
-                  placeholder="วันที่เอกสาร"
-                />
-              ) : (
-                <p className="font-bold text-gray-900 text-lg">{document.date || document.document_date || '-'}</p>
+                <p className="font-bold text-gray-900 text-lg">{normalizedDoc.from}</p>
               )}
             </div>
 
@@ -208,52 +223,67 @@ function DocumentDetail({ document, onClose, onUpdate }) {
                   placeholder="เลขที่เอกสาร"
                 />
               ) : (
-                <p className="font-bold text-gray-900 text-lg">{document.documentNo || document.document_no || '-'}</p>
+                <p className="font-bold text-gray-900 text-lg">{normalizedDoc.documentNo}</p>
+              )}
+            </div>
+
+            {/* Date */}
+            <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-2xl p-5 border-2 border-purple-100">
+              <p className="text-sm text-gray-600 mb-2 flex items-center gap-2">
+                <Calendar className="w-4 h-4" />
+                วันที่
+              </p>
+              {isEditing ? (
+                <input
+                  type="text"
+                  value={editData.date}
+                  onChange={(e) => setEditData({ ...editData, date: e.target.value })}
+                  className="font-bold text-gray-900 text-lg w-full px-3 py-2 border-2 border-purple-300 rounded-lg focus:border-purple-500"
+                  placeholder="วันที่เอกสาร"
+                />
+              ) : (
+                <p className="font-bold text-gray-900 text-lg">{normalizedDoc.date}</p>
+              )}
+            </div>
+
+            {/* To */}
+            <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-2xl p-5 border-2 border-green-100">
+              <p className="text-sm text-gray-600 mb-2 flex items-center gap-2">
+                <User className="w-4 h-4" />
+                ถึง
+              </p>
+              {isEditing ? (
+                <input
+                  type="text"
+                  value={editData.to}
+                  onChange={(e) => setEditData({ ...editData, to: e.target.value })}
+                  className="font-bold text-gray-900 text-lg w-full px-3 py-2 border-2 border-green-300 rounded-lg focus:border-green-500"
+                  placeholder="ผู้รับ/หน่วยงาน"
+                />
+              ) : (
+                <p className="font-bold text-gray-900 text-lg">{normalizedDoc.to}</p>
               )}
             </div>
           </div>
 
           {/* Subject */}
-          {(isEditing || document.subject) && (
-            <div className="bg-gradient-to-br from-cyan-50 to-blue-50 rounded-2xl p-5 border-2 border-cyan-100">
-              <p className="text-sm text-gray-600 mb-2 flex items-center gap-2">
-                <FileText className="w-4 h-4" />
-                เรื่อง
-              </p>
-              {isEditing ? (
-                <input
-                  type="text"
-                  value={editData.subject}
-                  onChange={(e) => setEditData({ ...editData, subject: e.target.value })}
-                  className="font-bold text-gray-900 text-lg w-full px-3 py-2 border-2 border-cyan-300 rounded-lg focus:border-cyan-500"
-                  placeholder="เรื่อง"
-                />
-              ) : (
-                <p className="font-bold text-gray-900 text-lg">{document.subject || '-'}</p>
-              )}
-            </div>
-          )}
-
-          {/* Department */}
-          {(isEditing || document.department || document.from_department) && (
-            <div className="bg-gradient-to-br from-indigo-50 to-purple-50 rounded-2xl p-5 border-2 border-indigo-100">
-              <p className="text-sm text-gray-600 mb-2 flex items-center gap-2">
-                <User className="w-4 h-4" />
-                หน่วยงาน
-              </p>
-              {isEditing ? (
-                <input
-                  type="text"
-                  value={editData.department}
-                  onChange={(e) => setEditData({ ...editData, department: e.target.value })}
-                  className="font-bold text-gray-900 text-lg w-full px-3 py-2 border-2 border-indigo-300 rounded-lg focus:border-indigo-500"
-                  placeholder="หน่วยงาน"
-                />
-              ) : (
-                <p className="font-bold text-gray-900 text-lg">{document.department || document.from_department || '-'}</p>
-              )}
-            </div>
-          )}
+          <div className="bg-gradient-to-br from-cyan-50 to-blue-50 rounded-2xl p-5 border-2 border-cyan-100">
+            <p className="text-sm text-gray-600 mb-2 flex items-center gap-2">
+              <FileText className="w-4 h-4" />
+              เรื่อง
+            </p>
+            {isEditing ? (
+              <textarea
+                value={editData.subject}
+                onChange={(e) => setEditData({ ...editData, subject: e.target.value })}
+                className="font-bold text-gray-900 text-lg w-full px-3 py-2 border-2 border-cyan-300 rounded-lg focus:border-cyan-500"
+                placeholder="เรื่อง"
+                rows={3}
+              />
+            ) : (
+              <p className="font-bold text-gray-900 text-lg">{normalizedDoc.subject}</p>
+            )}
+          </div>
 
           {/* Timeline */}
           {!isEditing && (
@@ -264,8 +294,8 @@ function DocumentDetail({ document, onClose, onUpdate }) {
               </h3>
               <div className="space-y-4">
                 {[
-                  { status: 'รับเอกสาร', time: document.created_at || '19 ต.ค. 2025 เวลา 09:30', color: 'green', active: true },
-                  { status: 'กำลังดำเนินการ', time: '19 ต.ค. 2025 เวลา 10:15', color: 'blue', active: document.status !== 'รับแล้ว' },
+                  { status: 'รับเอกสาร', time: normalizedDoc.created_at || '19 ต.ค. 2025 เวลา 09:30', color: 'green', active: true },
+                  { status: 'กำลังดำเนินการ', time: '19 ต.ค. 2025 เวลา 10:15', color: 'blue', active: normalizedDoc.status !== 'รับแล้ว' && normalizedDoc.status !== 'processed' },
                   { status: 'รอการอนุมัติ', time: '', color: 'gray', active: false }
                 ].map((step, i) => (
                   <div key={i} className="flex gap-4">
@@ -295,8 +325,8 @@ function DocumentDetail({ document, onClose, onUpdate }) {
                     <FileText className="w-8 h-8 text-blue-600" />
                   </div>
                   <div>
-                    <p className="font-bold text-gray-900 text-lg">เอกสารแนบ.pdf</p>
-                    <p className="text-sm text-gray-600 mt-1">2.4 MB</p>
+                    <p className="font-bold text-gray-900 text-lg">เอกสารแนบ</p>
+                    <p className="text-sm text-gray-600 mt-1">{(document.file_size / 1024).toFixed(1)} KB</p>
                   </div>
                 </div>
                 <button className="px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl hover:shadow-lg hover:shadow-blue-500/30 transition-all flex items-center gap-2 font-medium">
@@ -341,7 +371,7 @@ function DocumentDetail({ document, onClose, onUpdate }) {
                 แก้ไขเอกสาร
               </button>
               <button 
-                onClick={() => onUpdate(document.id || document.document_id, { status: 'เสร็จสิ้น' })}
+                onClick={() => onUpdate(document.id, { status: 'เสร็จสิ้น' })}
                 className="flex-1 px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl hover:shadow-xl hover:shadow-blue-500/30 transition-all font-medium"
               >
                 อัพเดทเป็นเสร็จสิ้น
