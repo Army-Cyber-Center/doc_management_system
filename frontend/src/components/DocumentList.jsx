@@ -25,12 +25,12 @@ function DocumentList({
   const [ocrLoading, setOcrLoading] = useState(false);
   const [ocrError, setOcrError] = useState(null);
 
-  // ✅ Statistics state
+  // ✅ Statistics state - 4 steps
   const [stats, setStats] = useState({
-    incoming: 0,
-    outgoing: 0,
-    pending: 0,
-    completed: 0
+    incoming: 0,        // Step 1: เอกสารรับเข้า
+    processing: 0,      // Step 2: กำลังดำเนินการ
+    sent_out: 0,        // Step 3: เอกสารส่งออก
+    completed: 0        // Step 4: เสร็จสิ้น
   });
 
   // ✅ Fetch all OCR documents on component mount or when activeTab changes
@@ -140,38 +140,44 @@ function DocumentList({
     }
   };
 
-  /**
-   * Calculate document statistics
-   */
-  const calculateStats = (documentsList) => {
-    const newStats = {
-      incoming: 0,
-      outgoing: 0,
-      pending: 0,
-      completed: 0
-    };
-
-    documentsList.forEach((doc) => {
-      const docType = doc.document_type || doc.type || 'incoming';
-      const status = doc.status || 'รับแล้ว';
-
-      // Count by type
-      if (docType === 'incoming' || docType === 'รับเข้า') {
-        newStats.incoming++;
-      } else if (docType === 'outgoing' || docType === 'ส่งออก') {
-        newStats.outgoing++;
-      }
-
-      // Count by status
-      if (status === 'รอดำเนินการ' || status === 'pending' || status === 'รอส่ง') {
-        newStats.pending++;
-      } else if (status === 'เสร็จสิ้น' || status === 'completed' || status === 'ส่งแล้ว') {
-        newStats.completed++;
-      }
-    });
-
-    setStats(newStats);
+/**
+ * ✅ Calculate document statistics (4 steps)
+ */
+const calculateStats = (documentsList) => {
+  const newStats = {
+    incoming: 0,        // Step 1: รับแล้ว (summary)
+    processing: 0,      // Step 2: กำลังดำเนินการ
+    sent_out: 0,        // Step 3: เอกสารส่งออก
+    completed: 0        // Step 4: เสร็จสิ้น
   };
+
+  // 1️⃣ นับเฉพาะสถานะจริงจากเอกสาร
+  documentsList.forEach(doc => {
+    const status = doc.status;
+
+    if (status === 'กำลังดำเนินการ' || status === 'in_progress') {
+      newStats.processing++;
+    } 
+    else if (status === 'เอกสารส่งออก' || status === 'sent_out') {
+      newStats.sent_out++;
+    } 
+    else if (status === 'เสร็จสิ้น' || status === 'completed') {
+      newStats.completed++;
+    }
+  });
+
+  // 2️⃣ รับแล้ว = รวม 3 สถานะด้านบน
+  newStats.incoming =
+    newStats.processing +
+    newStats.sent_out +
+    newStats.completed;
+
+  console.log('📊 Statistics:', newStats);
+
+  // 3️⃣ อัปเดต state
+  setStats(newStats);
+};
+
 
   /**
    * Fetch single OCR document by ID
@@ -239,15 +245,17 @@ function DocumentList({
   const getStatusColor = (status) => {
     switch (status) {
       case 'รับแล้ว':
+      case 'incoming':
         return 'bg-gradient-to-r from-blue-500 to-cyan-500 text-white';
-      case 'รอดำเนินการ':
+      case 'กำลังดำเนินการ':
+      case 'in_progress':
         return 'bg-gradient-to-r from-orange-400 to-amber-400 text-white';
-      case 'เสร็จสิ้น':
-        return 'bg-gradient-to-r from-emerald-500 to-teal-500 text-white';
-      case 'ส่งแล้ว':
+      case 'เอกสารส่งออก':
+      case 'sent_out':
         return 'bg-gradient-to-r from-green-500 to-emerald-500 text-white';
-      case 'รอส่ง':
-        return 'bg-gradient-to-r from-yellow-400 to-orange-400 text-white';
+      case 'เสร็จสิ้น':
+      case 'completed':
+        return 'bg-gradient-to-r from-purple-500 to-violet-500 text-white';
       default:
         return 'bg-gray-200 text-gray-800';
     }
@@ -299,7 +307,7 @@ function DocumentList({
 
   return (
     <div className="space-y-6">
-      {/* ✅ Statistics Dashboard */}
+      {/* ✅ Statistics Dashboard - 4 Steps */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <StatCard
           icon={Inbox}
@@ -309,15 +317,15 @@ function DocumentList({
         />
         <StatCard
           icon={Clock}
-          label="รอดำเนินการ"
-          value={stats.pending}
+          label="กำลังดำเนินการ"
+          value={stats.processing}
           color="bg-gradient-to-br from-orange-500 to-orange-600"
         />
 
         <StatCard
           icon={Send}
           label="เอกสารส่งออก"
-          value={stats.outgoing}
+          value={stats.sent_out}
           color="bg-gradient-to-br from-green-500 to-green-600"
         />
         <StatCard
