@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { X, User, Calendar, Clock, FileText, Download, Edit, TrendingUp, Save } from 'lucide-react';
 
+const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000/api/v1';
+
 function DocumentDetail({ document, onClose, onUpdate }) {
   // ✅ Debug
   console.log('🔍 DocumentDetail received:', document);
@@ -29,6 +31,7 @@ function DocumentDetail({ document, onClose, onUpdate }) {
 
   // ✅ เพิ่ม state สำหรับโหมดแก้ไข
   const [isEditing, setIsEditing] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   const [editData, setEditData] = useState({
     title: normalizedDoc.title || '',
     from: normalizedDoc.from || '',
@@ -41,28 +44,192 @@ function DocumentDetail({ document, onClose, onUpdate }) {
     documentNo: normalizedDoc.documentNo || ''
   });
 
+  // ✅ State สำหรับ timeline
+  const [currentStatus, setCurrentStatus] = useState(normalizedDoc.status);
+
+  /**
+   * Handle 401 - Redirect to login
+   */
+  const handleUnauthorized = () => {
+    console.error('🔐 Token expired or invalid');
+    localStorage.removeItem('access_token');
+    localStorage.removeItem('refresh_token');
+    window.location.href = '/login';
+  };
+
+  /**
+   * Get Authorization Header
+   */
+  const getAuthHeaders = () => {
+    const token = localStorage.getItem('access_token');
+    
+    if (!token) {
+      console.warn('⚠️ No access token found');
+      handleUnauthorized();
+      throw new Error('Authentication required. Please log in.');
+    }
+
+    return {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json'
+    };
+  };
+
+  // ✅ ฟังก์ชันอัพเดทสถานะผ่าน workflow API
+  const handleUpdateWorkflow = async () => {
+    setIsLoading(true);
+    try {
+      const headers = getAuthHeaders();
+      
+      // ✅ Determine next step based on current status
+      const getNextStep = () => {
+        const status = currentStatus;
+        
+        if (status === 'รับแล้ว' || status === 'processed') {
+          // Step 1: incoming → Step 2: processed
+          return {
+            step_number: 2,
+            action: 'process',
+            status: 'processed',
+            status_th: 'กำลังดำเนินการ'
+          };
+        } else if (status === 'กำลังดำเนินการ' || status === 'in_progress') {
+          // Step 2: processed → Step 3: completed
+          return {
+            step_number: 3,
+            action: 'complete',
+            status: 'completed',
+            status_th: 'เสร็จสิ้น'
+          };
+        } else {
+          // Default: already completed or incoming
+          return {
+            step_number: 1,
+            action: 'receive',
+            status: 'incoming',
+            status_th: 'รับแล้ว'
+          };
+        }
+      };
+
+      const nextStep = getNextStep();
+      
+      const payload = {
+        document_id: document.id,
+        step_number: nextStep.step_number,
+        action: nextStep.action,
+        status: nextStep.status,
+        comment: `Moved to step ${nextStep.step_number}: ${nextStep.status_th}`,
+        timestamp: new Date().toISOString()
+      };
+
+      const url = `${API_URL}/workflows/`;
+      console.log('📤 POST to', url);
+      console.log('📋 Payload:', JSON.stringify(payload, null, 2));
+      console.log(`✅ Moving from "${currentStatus}" to step ${nextStep.step_number}`);
+
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: headers,
+        body: JSON.stringify(payload)
+      });
+
+      console.log('📥 Response status:', response.status);
+      
+      if (response.status === 401) {
+        console.error('❌ Unauthorized (401)');
+        handleUnauthorized();
+        return;
+      }
+
+      if (response.status === 422) {
+        const errorText = await response.text();
+        console.error('❌ Validation Error (422):', errorText);
+        throw new Error(`Validation Error: ${errorText}`);
+      }
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('❌ Response error:', errorText);
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const result = await response.json();
+      console.log('✅ Workflow update successful:', result);
+      
+      // ✅ Update timeline with new status
+      setCurrentStatus(nextStep.status_th);
+      console.log('✅ Timeline updated to:', nextStep.status_th);
+      
+      // เรียก callback onUpdate เพื่ออัพเดท UI
+      await onUpdate(document.id, { status: nextStep.status_th });
+      
+      // ✅ Close modal after 1.5 seconds เพื่อให้เห็น timeline update
+      setTimeout(() => {
+        onClose();
+        // ✅ Reload page after closing modal
+        window.location.reload();
+      }, 1500);
+      
+    } catch (error) {
+      console.error('❌ Workflow update failed:', error);
+      alert('อัพเดทสถานะล้มเหลว: ' + error.message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   // ✅ ฟังก์ชันบันทึกการแก้ไข
   const handleSave = async () => {
     console.log('💾 กำลังบันทึก:', editData);
+    setIsLoading(true);
     try {
-      // แปลงกลับเป็น snake_case สำหรับ API
-      const apiData = {
+      const headers = getAuthHeaders();
+      
+      // ใช้ POST /api/v1/workflows/ เพื่ออัพเดท
+      const payload = {
+        document_id: document.id,
         title: editData.title,
         from_department: editData.from,
         to_department: editData.to,
         document_date: editData.date,
-        status: editData.status === 'ปกติ' ? 'normal' : editData.status,
-        priority: editData.priority === 'ปกติ' ? 'normal' : editData.priority,
+        status: editData.status,
+        priority: editData.priority,
         subject: editData.subject,
         department: editData.department,
         document_number: editData.documentNo
       };
       
-      await onUpdate(document.id, apiData);
+      const url = `${API_URL}/workflows/`;
+      console.log('📤 POST to', url, 'with:', payload);
+      
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: headers,
+        body: JSON.stringify(payload)
+      });
+
+      if (response.status === 401) {
+        console.error('❌ Unauthorized (401)');
+        handleUnauthorized();
+        return;
+      }
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const result = await response.json();
+      console.log('✅ Document updated via workflow:', result);
+      
+      await onUpdate(document.id, payload);
       setIsEditing(false);
+      
     } catch (error) {
       console.error('❌ บันทึกล้มเหลว:', error);
       alert('บันทึกไม่สำเร็จ: ' + error.message);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -119,6 +286,48 @@ function DocumentDetail({ document, onClose, onUpdate }) {
     }
   };
 
+  // ✅ ฟังก์ชันแสดงข้อความปุ่มตามขั้น
+  const getButtonText = () => {
+    if (currentStatus === 'รับแล้ว' || currentStatus === 'processed') {
+      return '→ ส่งไปดำเนินการ';
+    } else if (currentStatus === 'กำลังดำเนินการ' || currentStatus === 'in_progress') {
+      return '→ ทำเสร็จสิ้น';
+    } else {
+      return 'อัพเดทสถานะ';
+    }
+  };
+
+  // ✅ ฟังก์ชันสร้าง timeline steps
+  const getTimelineSteps = () => {
+    return [
+      { 
+        step: 1,
+        status: 'รับเอกสาร', 
+        time: normalizedDoc.created_at ? new Date(normalizedDoc.created_at).toLocaleString('th-TH') : '2025-12-19T06:32:39',
+        color: 'green', 
+        active: true 
+      },
+      { 
+        step: 2,
+        status: 'กำลังดำเนินการ', 
+        time: (currentStatus === 'กำลังดำเนินการ' || currentStatus === 'processed') 
+          ? new Date().toLocaleString('th-TH') 
+          : '',
+        color: 'blue', 
+        active: currentStatus === 'กำลังดำเนินการ' || currentStatus === 'processed' || currentStatus === 'เสร็จสิ้น' || currentStatus === 'completed'
+      },
+      { 
+        step: 3,
+        status: 'เสร็จสิ้น', 
+        time: (currentStatus === 'เสร็จสิ้น' || currentStatus === 'completed') 
+          ? new Date().toLocaleString('th-TH') 
+          : '',
+        color: 'purple', 
+        active: currentStatus === 'เสร็จสิ้น' || currentStatus === 'completed'
+      }
+    ];
+  };
+
   return (
     <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-3xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden">
@@ -153,8 +362,8 @@ function DocumentDetail({ document, onClose, onUpdate }) {
                     <option value="เสร็จสิ้น">เสร็จสิ้น</option>
                   </select>
                 ) : (
-                  <span className={`px-3 py-1.5 rounded-xl text-sm font-medium shadow-sm ${getStatusColor(normalizedDoc.status)}`}>
-                    {normalizedDoc.status}
+                  <span className={`px-3 py-1.5 rounded-xl text-sm font-medium shadow-sm ${getStatusColor(currentStatus)}`}>
+                    {currentStatus}
                   </span>
                 )}
 
@@ -293,46 +502,28 @@ function DocumentDetail({ document, onClose, onUpdate }) {
                 Timeline การดำเนินการ
               </h3>
               <div className="space-y-4">
-                {[
-                  { status: 'รับเอกสาร', time: normalizedDoc.created_at || '19 ต.ค. 2025 เวลา 09:30', color: 'green', active: true },
-                  { status: 'กำลังดำเนินการ', time: '19 ต.ค. 2025 เวลา 10:15', color: 'blue', active: normalizedDoc.status !== 'รับแล้ว' && normalizedDoc.status !== 'processed' },
-                  { status: 'รอการอนุมัติ', time: '', color: 'gray', active: false }
-                ].map((step, i) => (
+                {getTimelineSteps().map((step, i) => (
                   <div key={i} className="flex gap-4">
                     <div className={`w-3 h-3 rounded-full mt-2 ${
                       step.active 
-                        ? step.color === 'green' ? 'bg-green-500 shadow-lg shadow-green-500/50' : 'bg-blue-500 shadow-lg shadow-blue-500/50'
+                        ? step.color === 'green' 
+                          ? 'bg-green-500 shadow-lg shadow-green-500/50' 
+                          : step.color === 'blue'
+                          ? 'bg-blue-500 shadow-lg shadow-blue-500/50'
+                          : 'bg-purple-500 shadow-lg shadow-purple-500/50'
                         : 'bg-gray-300'
                     }`}></div>
                     <div className="flex-1 pb-4 border-l-2 border-dashed border-gray-200 last:border-0 pl-6 -ml-1.5">
-                      <p className={`font-semibold ${step.active ? 'text-gray-900' : 'text-gray-400'}`}>
-                        {step.status}
-                      </p>
+                      <div className="flex items-center gap-2">
+                        <p className={`font-semibold ${step.active ? 'text-gray-900' : 'text-gray-400'}`}>
+                          Step {step.step}: {step.status}
+                        </p>
+                        {step.active && <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded">ปัจจุบัน</span>}
+                      </div>
                       {step.time && <p className="text-sm text-gray-500 mt-1">{step.time}</p>}
                     </div>
                   </div>
                 ))}
-              </div>
-            </div>
-          )}
-
-          {/* Attachment */}
-          {!isEditing && (
-            <div className="bg-gradient-to-br from-gray-50 to-blue-50 rounded-2xl p-6 border-2 border-gray-200">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-4">
-                  <div className="w-16 h-16 bg-gradient-to-br from-blue-100 to-indigo-100 rounded-xl flex items-center justify-center">
-                    <FileText className="w-8 h-8 text-blue-600" />
-                  </div>
-                  <div>
-                    <p className="font-bold text-gray-900 text-lg">เอกสารแนบ</p>
-                    <p className="text-sm text-gray-600 mt-1">{(document.file_size / 1024).toFixed(1)} KB</p>
-                  </div>
-                </div>
-                <button className="px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl hover:shadow-lg hover:shadow-blue-500/30 transition-all flex items-center gap-2 font-medium">
-                  <Download className="w-4 h-4" />
-                  ดาวน์โหลด
-                </button>
               </div>
             </div>
           )}
@@ -351,30 +542,28 @@ function DocumentDetail({ document, onClose, onUpdate }) {
               </button>
               <button 
                 onClick={handleSave}
-                className="flex-1 px-6 py-3 bg-gradient-to-r from-green-600 to-emerald-600 text-white rounded-xl hover:shadow-xl transition-all font-medium flex items-center justify-center gap-2"
+                disabled={isLoading}
+                className="flex-1 px-6 py-3 bg-gradient-to-r from-green-600 to-emerald-600 text-white rounded-xl hover:shadow-xl transition-all font-medium flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <Save className="w-4 h-4" />
-                บันทึกการแก้ไข
+                {isLoading ? 'กำลังบันทึก...' : 'บันทึกการแก้ไข'}
               </button>
             </>
           ) : (
             <>
               {/* ✅ โหมดปกติ */}
               <button 
-                onClick={() => {
-                  console.log('✏️ เปิดโหมดแก้ไข');
-                  setIsEditing(true);
-                }}
-                className="flex-1 px-6 py-3 border-2 border-blue-300 text-blue-600 rounded-xl hover:bg-blue-50 transition-all font-medium flex items-center justify-center gap-2"
+                onClick={onClose}
+                className="flex-1 px-6 py-3 border-2 border-gray-300 text-gray-700 rounded-xl hover:bg-white transition-all font-medium"
               >
-                <Edit className="w-4 h-4" />
-                แก้ไขเอกสาร
+                ยกเลิก
               </button>
               <button 
-                onClick={() => onUpdate(document.id, { status: 'เสร็จสิ้น' })}
-                className="flex-1 px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl hover:shadow-xl hover:shadow-blue-500/30 transition-all font-medium"
+                onClick={handleUpdateWorkflow}
+                disabled={isLoading || currentStatus === 'เสร็จสิ้น' || currentStatus === 'completed'}
+                className="flex-1 px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl hover:shadow-xl hover:shadow-blue-500/30 transition-all font-medium disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                อัพเดทเป็นเสร็จสิ้น
+                {isLoading ? 'กำลังอัพเดท...' : currentStatus === 'เสร็จสิ้น' || currentStatus === 'completed' ? '✓ เสร็จสิ้นแล้ว' : getButtonText()}
               </button>
             </>
           )}

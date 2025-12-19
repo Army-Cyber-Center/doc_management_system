@@ -40,6 +40,34 @@ function DocumentList({
   }, [activeTab]);
 
   /**
+   * Handle 401 - Redirect to login
+   */
+  const handleUnauthorized = () => {
+    console.error('🔐 Token expired or invalid');
+    localStorage.removeItem('access_token');
+    localStorage.removeItem('refresh_token');
+    window.location.href = '/login';
+  };
+
+  /**
+   * Get Authorization Header
+   */
+  const getAuthHeaders = () => {
+    const token = localStorage.getItem('access_token');
+    
+    if (!token) {
+      console.warn('⚠️ No access token found');
+      handleUnauthorized();
+      throw new Error('Authentication required. Please log in.');
+    }
+
+    return {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json'
+    };
+  };
+
+  /**
    * Fetch all OCR documents
    */
   const fetchAllOCRDocuments = async () => {
@@ -47,41 +75,44 @@ function DocumentList({
     setOcrError(null);
 
     try {
-      const token = localStorage.getItem('access_token');
-      if (!token) {
-        throw new Error('Authentication required. Please log in.');
-      }
-
-      // ✅ ใช้ API_URL จาก .env
+      const headers = getAuthHeaders();
       const API_URL = process.env.REACT_APP_API_URL;
+
+      if (!API_URL) {
+        throw new Error('API_URL is not configured. Set REACT_APP_API_URL in .env');
+      }
 
       // ✅ Try different endpoints (ไม่ต้องเพิ่ม /api/v1 เพราะมีอยู่แล้ว)
       const endpoints = [
-        `${API_URL}/documents`,
         `${API_URL}/documents?document_type=${activeTab}`,
+        `${API_URL}/documents`,
         `${API_URL}/ocr/results`
       ];
 
       let data = null;
       let lastError = null;
 
-        for (const apiUrl of endpoints) {
+      for (const apiUrl of endpoints) {
         try {
+          console.log(`🔍 Trying endpoint: ${apiUrl}`);
 
           const response = await fetch(apiUrl, {
             method: 'GET',
-            headers: {
-              'Authorization': `Bearer ${token}`,
-              'Content-Type': 'application/json'
-            }
+            headers: headers
           });
 
           if (response.ok) {
             const responseText = await response.text();
             data = JSON.parse(responseText);
+            console.log(`✅ Success from: ${apiUrl}`);
             break;
+          } else if (response.status === 401) {
+            lastError = '❌ Authentication failed (401). Token may be expired.';
+            console.error(lastError);
+            handleUnauthorized();
           } else {
             lastError = `${response.status} ${response.statusText}`;
+            console.warn(`❌ Failed: ${apiUrl} - ${lastError}`);
           }
         } catch (err) {
           lastError = err.message;
@@ -92,8 +123,6 @@ function DocumentList({
       if (!data) {
         throw new Error(`All endpoints failed. Last error: ${lastError}`);
       }
-
-      
 
       // Handle different response formats
       const documentsList = Array.isArray(data) ? data : data.data || data.documents || [];
@@ -149,12 +178,12 @@ function DocumentList({
    */
   const fetchOCRDocument = async (documentId) => {
     try {
-      const token = localStorage.getItem('access_token');
-      if (!token) {
-        throw new Error('Authentication required. Please log in.');
-      }
-
+      const headers = getAuthHeaders();
       const API_URL = process.env.REACT_APP_API_URL;
+
+      if (!API_URL) {
+        throw new Error('API_URL is not configured. Set REACT_APP_API_URL in .env');
+      }
 
       // ✅ Try different endpoints
       const endpoints = [
@@ -165,20 +194,23 @@ function DocumentList({
       let data = null;
       let lastError = null;
 
-        for (const apiUrl of endpoints) {
+      for (const apiUrl of endpoints) {
         try {
+          console.log(`🔍 Fetching document: ${apiUrl}`);
 
           const response = await fetch(apiUrl, {
             method: 'GET',
-            headers: {
-              'Authorization': `Bearer ${token}`,
-              'Content-Type': 'application/json'
-            }
+            headers: headers
           });
 
           if (response.ok) {
             data = await response.json();
+            console.log(`✅ Document fetched from: ${apiUrl}`);
             break;
+          } else if (response.status === 401) {
+            lastError = 'Token expired. Redirecting to login...';
+            console.error(lastError);
+            handleUnauthorized();
           } else {
             lastError = `${response.status} ${response.statusText}`;
           }
@@ -192,7 +224,6 @@ function DocumentList({
         throw new Error(`All endpoints failed. Last error: ${lastError}`);
       }
 
-      
       return data;
 
     } catch (err) {
@@ -276,14 +307,6 @@ function DocumentList({
           value={stats.incoming}
           color="bg-gradient-to-br from-blue-500 to-blue-600"
         />
-
-        <StatCard
-          icon={Send}
-          label="เอกสารส่งออก"
-          value={stats.outgoing}
-          color="bg-gradient-to-br from-green-500 to-green-600"
-        />
-
         <StatCard
           icon={Clock}
           label="รอดำเนินการ"
@@ -291,6 +314,12 @@ function DocumentList({
           color="bg-gradient-to-br from-orange-500 to-orange-600"
         />
 
+        <StatCard
+          icon={Send}
+          label="เอกสารส่งออก"
+          value={stats.outgoing}
+          color="bg-gradient-to-br from-green-500 to-green-600"
+        />
         <StatCard
           icon={CheckCircle2}
           label="เสร็จสิ้น"
@@ -387,10 +416,6 @@ function DocumentList({
                         <h3 className="font-semibold text-gray-900 group-hover:text-blue-600 transition-colors line-clamp-1">
                           {title}
                         </h3>
-
-                        <span className={`px-3 py-1 rounded-full text-xs font-medium whitespace-nowrap ${getStatusColor(status)}`}>
-                          {status}
-                        </span>
 
                         <span className={`text-xs font-bold whitespace-nowrap ${getPriorityColor(priority)}`}>
                           ● {priority}

@@ -513,33 +513,24 @@ function DocumentForm({ onClose, onSubmit }) {
                 className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
               />
             </div>
+          
+          {loadingDetails && (
+            <div className="border-2 border-dashed border-indigo-200 rounded-2xl p-6 bg-indigo-50">
+              <p className="font-bold text-indigo-700 mb-3 text-center">
+                ⏳ กรุณารอสักครู่ ระบบกำลังประมวลผลข้อมูลเอกสาร
+                ระบบกำลังประมวลผลเอกสาร
+                อาจใช้เวลาประมาณ 1–2 นาที
+                กรุณาอย่าปิดหน้านี้
+              </p>
 
-            {/* Rotation */}
-            <div>
-              <div className="flex justify-between items-center mb-2">
-                <label className="text-sm font-semibold text-gray-700">หมุน</label>
-                <span className="text-sm text-gray-600 font-mono">{rotation}°</span>
-              </div>
-              <div className="flex gap-2 items-center">
-                <input
-                  type="range"
-                  min={0}
-                  max={360}
-                  step={1}
-                  value={rotation}
-                  onChange={(e) => setRotation(parseInt(e.target.value))}
-                  className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
+              <div className="w-full bg-indigo-100 rounded-full h-3 overflow-hidden">
+                <div
+                  className="h-3 bg-gradient-to-r from-indigo-500 to-blue-600 transition-all duration-300"
+                  style={{ width: `${progress}%` }}
                 />
-                <button
-                  type="button"
-                  onClick={() => setRotation((rotation + 90) % 360)}
-                  className="px-4 py-2 bg-white border-2 border-gray-200 rounded-lg hover:border-blue-400 transition-all text-sm font-medium"
-                >
-                  🔄 90°
-                </button>
               </div>
             </div>
-
+          )}
             {/* Flip */}
             <div>
               <label className="text-sm font-semibold text-gray-700 mb-3 block">พลิก</label>
