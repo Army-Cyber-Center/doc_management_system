@@ -1,18 +1,15 @@
 import React, { useState } from 'react';
 import Header from './components/Header';
-// import StatsCard from './components/StatsCard'; // ✅ comment ออกถ้าไม่ใช้
 import DocumentList from './components/DocumentList';
 import DocumentForm from './components/DocumentForm';
 import DocumentDetail from './components/DocumentDetail';
 import { useDocuments, useStats } from './hooks';
-// import { Inbox, Send, Clock, CheckCircle } from 'lucide-react'; // ✅ comment ออกถ้าไม่ใช้
 import LoginSystem from "./components/LoginSystem";
 import './App.css';
-import { useTyphoonOCR } from './hooks/useTyphoonOCR';
 import { useAuth } from './context/AuthContext';
 
 function App() {
-  const { isAuthenticated } = useAuth(); // ✅ ลบ token ออก
+  const { isAuthenticated } = useAuth();
   
   const [activeTab, setActiveTab] = useState('incoming');
   const [showNewDocForm, setShowNewDocForm] = useState(false);
@@ -22,15 +19,11 @@ function App() {
     type: activeTab,
   });
 
-  const { stats, fetchStats } = useStats();
-
-  const { processFile } = useTyphoonOCR();
+  const { fetchStats } = useStats();
 
   if (!isAuthenticated) {
     return <LoginSystem />;
   }
-
-  // ✅ ลบ statsConfig, handleNewDocumentSubmit ถ้าไม่ใช้
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
@@ -42,7 +35,10 @@ function App() {
           setActiveTab={setActiveTab}
           documents={documents}
           loading={loading}
-          onDocumentClick={setSelectedDoc}
+          onDocumentClick={(doc) => {
+            console.log('📄 เปิดเอกสาร:', doc);
+            setSelectedDoc(doc);
+          }}
           onNewDocument={() => setShowNewDocForm(true)}
         />
 
@@ -50,9 +46,12 @@ function App() {
           <DocumentForm
             onClose={() => setShowNewDocForm(false)}
             onSubmit={async (data) => {
+              console.log('💾 กำลังบันทึกเอกสารใหม่:', data);
               await createDocument(data);
               await fetchStats();
+              await fetchDocuments();
               setShowNewDocForm(false);
+              console.log('✅ บันทึกเอกสารสำเร็จ');
             }}
           />
         )}
@@ -60,11 +59,22 @@ function App() {
         {selectedDoc && (
           <DocumentDetail
             document={selectedDoc}
-            onClose={() => setSelectedDoc(null)}
-            onUpdate={async (id, updates) => {
-              await updateDocument(id, updates);
-              await fetchStats();
+            onClose={() => {
+              console.log('❌ ปิด DocumentDetail');
               setSelectedDoc(null);
+            }}
+            onUpdate={async (id, updates) => {
+              console.log('✏️ กำลังอัพเดตเอกสาร ID:', id, 'ข้อมูล:', updates);
+              try {
+                await updateDocument(id, updates);
+                await fetchStats();
+                await fetchDocuments();
+                setSelectedDoc(null);
+                console.log('✅ อัพเดตเอกสารสำเร็จ');
+              } catch (error) {
+                console.error('❌ อัพเดตเอกสารล้มเหลว:', error);
+                alert('ไม่สามารถอัพเดตเอกสารได้: ' + error.message);
+              }
             }}
           />
         )}
