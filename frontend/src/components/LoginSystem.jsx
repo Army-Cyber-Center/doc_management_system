@@ -1,7 +1,11 @@
 import React, { useState } from 'react';
 import { Lock, Mail, Eye, EyeOff, AlertCircle, CheckCircle, LogIn, UserPlus } from 'lucide-react';
+import { useAuth } from '../context/AuthContext'; // ✅ เพิ่ม
 
-export default function LoginSystem({ onLoginSuccess }) {
+export default function LoginSystem() {
+  // ✅ ใช้ useAuth
+  const { login } = useAuth();
+  
   const [isLogin, setIsLogin] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -21,148 +25,121 @@ export default function LoginSystem({ onLoginSuccess }) {
     setMessage(null);
   };
 
-const handleLogin = async () => {
-  setLoading(true);
-  setMessage(null);
+  const handleLogin = async () => {
+    setLoading(true);
+    setMessage(null);
 
-  try {
-    const formBody = new URLSearchParams();
-    formBody.append('username', formData.username);
-    formBody.append('password', formData.password);
+    try {
+      const formBody = new URLSearchParams();
+      formBody.append('username', formData.username);
+      formBody.append('password', formData.password);
 
-    const tokenResponse = await fetch(`${API_URL}/auth/token`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: formBody
-    });
+      // ✅ แก้ไข: ใช้ API_URL โดยตรง (มี /api/v1 อยู่แล้ว)
+      const tokenResponse = await fetch(`${API_URL}/auth/token`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: formBody
+      });
 
-    const tokenData = await tokenResponse.json();
+      const tokenData = await tokenResponse.json();
 
-    if (!tokenResponse.ok) {
-      throw new Error(tokenData.detail || 'ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง');
+      if (!tokenResponse.ok) {
+        throw new Error(tokenData.detail || 'ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง');
+      }
+
+      const token = tokenData.access_token;
+
+      // ✅ Fetch user data
+      const userResponse = await fetch(`${API_URL}/auth/me`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      
+      let userData = null;
+      if (userResponse.ok) {
+        userData = await userResponse.json();
+      }
+
+      setMessage({ type: 'success', text: 'เข้าสู่ระบบสำเร็จ!' });
+
+      // ✅ ใช้ login จาก AuthContext
+      login(token, userData);
+
+    } catch (error) {
+      setMessage({ type: 'error', text: error.message });
+    } finally {
+      setLoading(false);
     }
+  };
 
-    const token = tokenData.access_token;
+  const handleRegister = async () => {
+    setLoading(true);
+    setMessage(null);
 
-    // ✅ ใช้ key เดียวกับ App.js
-    localStorage.setItem('access_token', token);
-
-    // (optional) fetch user
-    const userResponse = await fetch(`${API_URL}/auth/me`, {
-      headers: { Authorization: `Bearer ${token}` }
-    });
-    const userData = await userResponse.json();
-    localStorage.setItem('user', JSON.stringify(userData));
-
-    setMessage({ type: 'success', text: 'เข้าสู่ระบบสำเร็จ!' });
-
-    // ✅ สำคัญที่สุด
-    onLoginSuccess(token);
-
-  } catch (error) {
-    setMessage({ type: 'error', text: error.message });
-  } finally {
-    setLoading(false);
-  }
-};
-
-const handleRegister = async () => {
-  setLoading(true);
-  setMessage(null);
-
-  if (!formData.username || !formData.password || !formData.id_army) {
-    setMessage({ type: 'error', text: 'กรุณากรอกข้อมูลให้ครบถ้วน' });
-    setLoading(false);
-    return;
-  }
-
-  try {
-    const response = await fetch(`${API_URL}/auth/register`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        username: formData.username,
-        password: formData.password,
-        id_army: formData.id_army,
-        role: formData.role || 'user',
-      }),
-    });
-
-    if (formData.username.length < 3) {
-  setMessage({ type: 'error', text: 'ชื่อผู้ใช้ต้องมีอย่างน้อย 3 ตัวอักษร' });
-  return;
-}
-
-if (formData.password.length < 8) {
-  setMessage({ type: 'error', text: 'รหัสผ่านต้องมีอย่างน้อย 8 ตัวอักษร' });
-  return;
-}
-
-   const data = await response.json();
-    console.log('Registration response:', data); // <-- see exact error
-
-    if (!response.ok) {
-      throw new Error(data.error || 'สมัครสมาชิกไม่สำเร็จ');
-    }
-
-    setMessage({
-      type: 'success',
-      text: 'สมัครสมาชิกสำเร็จ! กรุณาเข้าสู่ระบบ',
-    });
-
-    // reset form
-    setFormData({
-      username: '',
-      password: '',
-      id_army: '',
-      role: 'staff',
-    });
-
-    setIsLogin(true);
-
-  } catch (error) {
-    setMessage({
-      type: 'error',
-      text: error.message || 'เชื่อมต่อ Backend ไม่ได้',
-    });
-  } finally {
-    setLoading(false);
-  }
-}
-const fetchUserProfile = async () => {
-  try {
-    const token = localStorage.getItem('access_token'); // หรือ 'token' ถ้าใช้ชื่ออื่น
-    if (!token) {
-      console.log('ไม่มี token');
+    // ✅ Validation
+    if (!formData.username || !formData.password || !formData.id_army) {
+      setMessage({ type: 'error', text: 'กรุณากรอกข้อมูลให้ครบถ้วน' });
+      setLoading(false);
       return;
     }
 
-    const response = await fetch(`${API_URL}/api/v1/auth/me`, {
-      method: 'GET',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      }
-    });
-
-    if (!response.ok) {
-      throw new Error('ไม่สามารถดึงข้อมูลผู้ใช้ได้');
+    if (formData.username.length < 3) {
+      setMessage({ type: 'error', text: 'ชื่อผู้ใช้ต้องมีอย่างน้อย 3 ตัวอักษร' });
+      setLoading(false);
+      return;
     }
 
-    const data = await response.json();
-    console.log('ข้อมูลผู้ใช้:', data);
+    if (formData.password.length < 8) {
+      setMessage({ type: 'error', text: 'รหัสผ่านต้องมีอย่างน้อย 8 ตัวอักษร' });
+      setLoading(false);
+      return;
+    }
 
-    // ตัวอย่าง: เก็บใน state
-    // setUser(data);
-    await handleLogin(); // login ก่อน
-    fetchUserProfile();  // ดึงข้อมูล user
+    try {
+      // ✅ แก้ไข: ใช้ API_URL โดยตรง
+      const response = await fetch(`${API_URL}/auth/register`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          username: formData.username,
+          password: formData.password,
+          id_army: formData.id_army,
+          role: formData.role || 'user',
+        }),
+      });
 
-  } catch (error) {
-    console.error('Error fetching user profile:', error);
-  }
-};
+      const data = await response.json();
+      console.log('Registration response:', data);
+
+      if (!response.ok) {
+        throw new Error(data.detail || data.error || 'สมัครสมาชิกไม่สำเร็จ');
+      }
+
+      setMessage({
+        type: 'success',
+        text: 'สมัครสมาชิกสำเร็จ! กรุณาเข้าสู่ระบบ',
+      });
+
+      // reset form
+      setFormData({
+        username: '',
+        password: '',
+        id_army: '',
+        role: 'staff',
+      });
+
+      setIsLogin(true);
+
+    } catch (error) {
+      setMessage({
+        type: 'error',
+        text: error.message || 'เชื่อมต่อ Backend ไม่ได้',
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -289,21 +266,21 @@ const fetchUserProfile = async () => {
               </div>
             )}
 
-            {/* Login Form */}
+              {/* Login Form */}
             {isLogin ? (
-              <div className="space-y-5">
+              <form onSubmit={handleSubmit} className="space-y-5">
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-2">ชื่อผู้ใช้</label>
                   <div className="relative">
                     <Mail className="w-5 h-5 absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
                     <input
-                      type="username"
+                      type="text"
                       name="username"
                       value={formData.username}
                       onChange={handleInputChange}
                       className="w-full pl-12 pr-4 py-3.5 bg-gray-50 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
                       placeholder="ชื่อผู้ใช้"
-                      onKeyPress={(e) => e.key === 'Enter' && handleLogin()}
+                    
                     />
                   </div>
                 </div>
@@ -318,7 +295,7 @@ const fetchUserProfile = async () => {
                       onChange={handleInputChange}
                       className="w-full pl-12 pr-12 py-3.5 bg-gray-50 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
                       placeholder="••••••••"
-                      onKeyPress={(e) => e.key === 'Enter' && handleLogin()}
+                    
                     />
                     <button
                       type="button"
@@ -339,7 +316,7 @@ const fetchUserProfile = async () => {
                 </div>
                 
                 <button
-                  onClick={handleLogin}
+                  type="submit"
                   disabled={loading}
                   className="w-full py-4 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl font-semibold hover:shadow-xl hover:shadow-blue-500/30 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                 >
@@ -352,14 +329,14 @@ const fetchUserProfile = async () => {
                     'เข้าสู่ระบบ'
                   )}
                 </button>
-              </div>
+              </form>
             ) : (
               /* Register Form */
-              <div className="space-y-4">
+              <form onSubmit={handleSubmit} className="space-y-4">
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-2">ชื่อผู้ใช้</label>
                   <input
-                    type="username"
+                    type="text"
                     name="username"
                     value={formData.username}
                     onChange={handleInputChange}
@@ -367,16 +344,16 @@ const fetchUserProfile = async () => {
                     placeholder="ชื่อผู้ใช้"
                   />
                 </div>
-                  <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">เลขประจำตัวทหาร (ID ARMY)</label>
-                <input
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">เลขประจำตัวทหาร (ID ARMY)</label>
+                  <input
                     type="text"
                     name="id_army"
                     value={formData.id_army}
                     onChange={handleInputChange}
                     className="w-full px-4 py-3 bg-gray-50 border-2 border-gray-200 rounded-xl"
                     placeholder="เช่น 56852"
-                />
+                  />
                 </div>
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-2">รหัสผ่าน</label>
@@ -399,41 +376,8 @@ const fetchUserProfile = async () => {
                   </div>
                 </div>
 
-                {/* <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">หน่วยงาน</label>
-                    <select
-                      name="department"
-                      value={formData.department}
-                      onChange={handleInputChange}
-                      className="w-full px-4 py-3 bg-gray-50 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-                    >
-                      <option value="">เลือกหน่วยงาน</option>
-                      <option value="กองคลัง">กองคลัง</option>
-                      <option value="ฝ่ายบริหาร">ฝ่ายบริหาร</option>
-                      <option value="ฝ่ายเทคโนโลยีสารสนเทศ">ฝ่ายเทคโนโลยีสารสนเทศ</option>
-                      <option value="ฝ่ายทรัพยากรบุคคล">ฝ่ายทรัพยากรบุคคล</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">ตำแหน่ง</label>
-                    <select
-                      name="position"
-                      value={formData.position}
-                      onChange={handleInputChange}
-                      className="w-full px-4 py-3 bg-gray-50 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-                    >
-                      <option value="">เลือกตำแหน่ง</option>
-                      <option value="ผู้จัดการ">ผู้จัดการ</option>
-                      <option value="หัวหน้าฝ่าย">หัวหน้าฝ่าย</option>
-                      <option value="เจ้าหน้าที่">เจ้าหน้าที่</option>
-                      <option value="ผู้ช่วย">ผู้ช่วย</option>
-                    </select>
-                  </div>
-                </div> */}
-
                 <button
-                  onClick={handleRegister}
+                  type="submit"
                   disabled={loading}
                   className="w-full py-4 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl font-semibold hover:shadow-xl hover:shadow-blue-500/30 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                 >
@@ -448,19 +392,9 @@ const fetchUserProfile = async () => {
                 </button>
               </div>
             )}
-
-            {/* Backend Connection Info */}
-            {/* <div className="mt-6 p-4 bg-blue-50 border-2 border-blue-200 rounded-xl">
-              <p className="text-xs text-blue-800 font-medium mb-2">🔗 Backend API Endpoint:</p>
-              <code className="text-xs text-blue-600 bg-white px-2 py-1 rounded">{API_URL}</code>
-              <p className="text-xs text-blue-700 mt-2">
-                ⚠️ ตรวจสอบว่า Backend รันที่ <strong>localhost:8081</strong>
-              </p>
-            </div> */}
           </div>
         </div>
       </div>
-
     </div>
   );
 }

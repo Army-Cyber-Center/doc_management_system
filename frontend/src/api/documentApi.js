@@ -11,7 +11,8 @@ export const uploadDocument = async (formData, token) => {
   }
 
   try {
-    const response = await fetch(`${API_BASE_URL}/api/v1/documents/upload`, {
+    // ✅ แก้ไข: ใช้ API_BASE_URL โดยตรง (มี /api/v1 อยู่แล้ว)
+    const response = await fetch(`${API_BASE_URL}/documents/upload`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${token}`,
@@ -21,7 +22,7 @@ export const uploadDocument = async (formData, token) => {
 
     if (!response.ok) {
       const errorData = await response.json();
-      throw new Error(errorData.error || errorData.message || 'Upload failed');
+      throw new Error(errorData.detail || errorData.error || errorData.message || 'Upload failed');
     }
 
     return await response.json();
@@ -40,6 +41,7 @@ export const fetchDocumentById = async (documentId, token) => {
   }
 
   try {
+    // ✅ แก้ไข: เพิ่ม API_BASE_URL
     const response = await fetch(
       `${API_BASE_URL}/documents/${documentId}`,
       {
@@ -53,7 +55,7 @@ export const fetchDocumentById = async (documentId, token) => {
 
     if (!response.ok) {
       const errorData = await response.json();
-      throw new Error(errorData.error || errorData.message || 'Fetch failed');
+      throw new Error(errorData.detail || errorData.error || errorData.message || 'Fetch failed');
     }
 
     return await response.json();
@@ -71,22 +73,25 @@ export const fetchDocuments = async (filters = {}, token) => {
 
   const query = new URLSearchParams(filters).toString();
 
+  // ✅ แก้ไข: ใช้ API_BASE_URL
   const response = await fetch(
-    `${API_BASE_URL}/documents/${query ? `?${query}` : ''}`,
+    `${API_BASE_URL}/documents${query ? `?${query}` : ''}`,
     {
       headers: {
         Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
       },
     }
   );
 
   if (!response.ok) {
-    const text = await response.text();
-    throw new Error(text || 'Fetch failed');
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.detail || errorData.error || 'Fetch failed');
   }
 
   return response.json();
 };
+
 /**
  * Delete document by ID
  */
@@ -96,6 +101,7 @@ export const deleteDocument = async (documentId, token) => {
   }
 
   try {
+    // ✅ แก้ไข: ใช้ API_BASE_URL
     const response = await fetch(
       `${API_BASE_URL}/documents/${documentId}`,
       {
@@ -108,7 +114,7 @@ export const deleteDocument = async (documentId, token) => {
 
     if (!response.ok) {
       const errorData = await response.json();
-      throw new Error(errorData.error || errorData.message || 'Delete failed');
+      throw new Error(errorData.detail || errorData.error || errorData.message || 'Delete failed');
     }
 
     return await response.json();
@@ -127,6 +133,7 @@ export const updateDocument = async (documentId, updateData, token) => {
   }
 
   try {
+    // ✅ แก้ไข: ใช้ API_BASE_URL
     const response = await fetch(
       `${API_BASE_URL}/documents/${documentId}`,
       {
@@ -141,7 +148,7 @@ export const updateDocument = async (documentId, updateData, token) => {
 
     if (!response.ok) {
       const errorData = await response.json();
-      throw new Error(errorData.error || errorData.message || 'Update failed');
+      throw new Error(errorData.detail || errorData.error || errorData.message || 'Update failed');
     }
 
     return await response.json();

@@ -1,20 +1,28 @@
 import { useState, useEffect, useCallback } from 'react';
 import documentApi from '../api/documentApi';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../context/AuthContext'; // ✅ เพิ่ม
 
 export const useDocuments = ({ type }) => {
+  // ✅ ใช้ useAuth แทนการรับ token จาก props
   const { token } = useAuth();
+  
   const [documents, setDocuments] = useState([]);
   const [loading, setLoading] = useState(true);
 
   const fetchDocuments = useCallback(async () => {
-    if (!token) return;
+    if (!token) {
+      setDocuments([]);
+      setLoading(false);
+      return;
+    }
+    
     setLoading(true);
     try {
       const data = await documentApi.fetchDocuments({ type }, token);
-      setDocuments(data);
+      setDocuments(Array.isArray(data) ? data : []);
     } catch (error) {
       console.error('Fetch documents error:', error);
+      setDocuments([]);
     } finally {
       setLoading(false);
     }

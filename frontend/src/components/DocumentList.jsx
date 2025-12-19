@@ -51,11 +51,14 @@ function DocumentList({
         throw new Error('Authentication required. Please log in.');
       }
 
-      // ✅ Try different endpoints
+      // ✅ ใช้ API_URL จาก .env
+      const API_URL = process.env.REACT_APP_API_URL;
+
+      // ✅ Try different endpoints (ไม่ต้องเพิ่ม /api/v1 เพราะมีอยู่แล้ว)
       const endpoints = [
-        `${process.env.REACT_APP_API_URL}/documents`,
-        `${process.env.REACT_APP_API_URL}/ocr_results`,
-        `${process.env.REACT_APP_API_URL}/documents?document_type=incoming`
+        `${API_URL}/documents`,
+        `${API_URL}/documents?document_type=${activeTab}`,
+        `${API_URL}/ocr/results`
       ];
 
       let data = null;
@@ -153,11 +156,12 @@ function DocumentList({
         throw new Error('Authentication required. Please log in.');
       }
 
+      const API_URL = process.env.REACT_APP_API_URL;
+
       // ✅ Try different endpoints
       const endpoints = [
-        `${process.env.REACT_APP_API_URL}/documents/${documentId}`,
-        `${process.env.REACT_APP_API_URL}/ocr_results/${documentId}`,
-        `${process.env.REACT_APP_API_URL}/documents/${documentId}/ocr`
+        `${API_URL}/documents/${documentId}`,
+        `${API_URL}/ocr/document/${documentId}`
       ];
 
       let data = null;
