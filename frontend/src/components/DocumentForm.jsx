@@ -49,15 +49,16 @@ const parseOCRText = (extractedText) => {
   return result;
 };
 
-// ✅ แก้ไข: เพิ่ม onProgress callback + เพิ่ม timeout
+// ✅ แก้ไข: เพิ่ม onProgress + onMessage callback
 const waitForDocument = async (
   getDocument,
   id,
   {
-    interval = 3000,  // ยิงซ้ำทุก 3 วิ
-    timeout = 240000  // ✅ เพิ่มเป็น 240 วิ (4 นาที)
+    interval = 3000,
+    timeout = 240000
   } = {},
-  onProgress // ✅ เพิ่ม callback
+  onProgress,
+  onMessage
 ) => {
   const start = Date.now();
   let attempts = 0;
@@ -65,6 +66,7 @@ const waitForDocument = async (
 
   while (Date.now() - start < timeout) {
     attempts++;
+    const elapsed = Math.floor((Date.now() - start) / 1000);
     
     // ✅ อัพเดต progress (0-90%)
     if (onProgress) {
@@ -72,17 +74,33 @@ const waitForDocument = async (
       onProgress(progressPercent);
     }
 
+    // ✅ อัพเดตข้อความตามเวลา
+    if (onMessage) {
+      if (elapsed < 30) {
+        onMessage('🔍 กำลังวิเคราะห์เอกสาร...');
+      } else if (elapsed < 60) {
+        onMessage('📝 กำลังแยกข้อความจากเอกสาร...');
+      } else if (elapsed < 90) {
+        onMessage('🔄 กำลังประมวลผลข้อมูล...');
+      } else if (elapsed < 120) {
+        onMessage('⏳ เกือบเสร็จแล้ว กรุณารอสักครู่...');
+      } else {
+        onMessage('⌛ กำลังประมวลผลขั้นสุดท้าย...');
+      }
+    }
+
     try {
-      console.log(`⏳ กำลังรอ OCR... (${attempts}/${maxAttempts})`);
+      console.log(`⏳ [${elapsed}s] กำลังรอ OCR... (ครั้งที่ ${attempts}/${maxAttempts})`);
       const data = await getDocument(id);
 
       if (data?.ocr_data?.extracted_text) {
         console.log('✅ OCR เสร็จแล้ว!');
         if (onProgress) onProgress(100);
+        if (onMessage) onMessage('✅ ประมวลผลสำเร็จ!');
         return data;
       }
     } catch (err) {
-      console.warn('⚠️ ยังไม่พร้อม, รอต่อ...', err.message);
+      console.warn(`⚠️ [${elapsed}s] ยังไม่พร้อม, รอต่อ...`, err.message);
     }
 
     await new Promise(resolve => setTimeout(resolve, interval));
@@ -117,38 +135,58 @@ function DocumentForm({ onClose, onSubmit }) {
   const [zoom, setZoom] = useState(1);
   const [croppedAreaPixels, setCroppedAreaPixels] = useState(null);
   const [tempImage, setTempImage] = useState(null);
+  
+  // ✅ เพิ่ม state สำหรับ progress + message
   const [progress, setProgress] = useState(0);
+  const [progressMessage, setProgressMessage] = useState('');
 
   // ✅ แก้ไข useEffect
   useEffect(() => {
     const fetchFullDocumentDetails = async () => {
-      if (!result?.id || documentDetails?.ocr_id === result.id) return;
+      // ✅ ตรวจสอบเงื่อนไข
+      if (!result?.id) {
+        console.log('❌ ไม่มี result.id');
+        return;
+      }
+      
+      if (documentDetails?.ocr_id === result.id) {
+        console.log('✅ มีข้อมูลแล้ว');
+        return;
+      }
 
+      console.log('🚀 เริ่มต้นการประมวลผล OCR... ID:', result.id);
+      
       setLoadingDetails(true);
       setProgress(0);
+      setProgressMessage('🔍 กำลังเตรียมการ...');
 
       try {
-        console.log('🚀 เริ่มต้นการประมวลผล OCR...');
-        
-        // ✅ รอจน DB พร้อม + ส่ง progress callback
+        // ✅ รอจน DB พร้อม
         const data = await waitForDocument(
           getDocument, 
           result.id, 
           {
-            interval: 3000,   // 3 วิ
-            timeout: 240000   // 4 นาที
+            interval: 3000,
+            timeout: 240000
           },
           (progressPercent) => {
-            // ✅ อัพเดต progress bar real-time
+            // ✅ อัพเดต progress
             setProgress(progressPercent);
             console.log(`📊 ความคืบหน้า: ${progressPercent.toFixed(0)}%`);
+          },
+          (message) => {
+            // ✅ อัพเดตข้อความ
+            setProgressMessage(message);
+            console.log(`💬 ${message}`);
           }
         );
 
         setProgress(100);
-        console.log('✅ ดึงข้อมูลสำเร็จ!');
+        setProgressMessage('✅ ประมวลผลสำเร็จ!');
+        console.log('✅ ดึงข้อมูลสำเร็จ!', data);
 
-        const rawText = data.ocr_data.extracted_text;
+        // ✅ Parse OCR data
+        const rawText = data.ocr_data?.extracted_text || '';
         const parsed = parseOCRText(rawText);
 
         setDocumentDetails({
@@ -157,17 +195,33 @@ function DocumentForm({ onClose, onSubmit }) {
           full_raw_text: rawText
         });
 
+        // ✅ รอ 500ms แล้วปิด modal
+        setTimeout(() => {
+          setLoadingDetails(false);
+          setProgress(0);
+          setProgressMessage('');
+        }, 500);
+
       } catch (err) {
         console.error('❌ เกิดข้อผิดพลาด:', err);
         setProgress(0);
-        alert('⚠️ ระบบใช้เวลานานเกินไป (เกิน 4 นาที)\n\nกรุณา:\n1. ตรวจสอบขนาดไฟล์ (ควร < 5MB)\n2. ลองอัพโหลดใหม่อีกครั้ง\n3. ติดต่อผู้ดูแลระบบหากปัญหายังคงอยู่');
-      } finally {
+        setProgressMessage('');
         setLoadingDetails(false);
+        
+        alert(
+          '⚠️ ระบบใช้เวลานานเกินไป (เกิน 4 นาที)\n\n' +
+          'กรุณา:\n' +
+          '1. ตรวจสอบขนาดไฟล์ (ควร < 5MB)\n' +
+          '2. ตรวจสอบคุณภาพภาพ (ชัดเจน ไม่เบลอ)\n' +
+          '3. ลองอัพโหลดใหม่อีกครั้ง\n' +
+          '4. ติดต่อผู้ดูแลระบบหากปัญหายังคงอยู่'
+        );
       }
     };
 
     fetchFullDocumentDetails();
-  }, [result, documentDetails, getDocument]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [result?.id]);
 
   // ✅ Auto-fill form when documentDetails available
   useEffect(() => {
@@ -267,7 +321,7 @@ function DocumentForm({ onClose, onSubmit }) {
       <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
         <div className="bg-white rounded-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto shadow-2xl">
           {/* Header */}
-          <div className="sticky top-0 bg-gradient-to-r from-blue-600 to-indigo-600 text-white p-6 flex justify-between items-center rounded-t-2xl">
+          <div className="sticky top-0 bg-gradient-to-r from-blue-600 to-indigo-600 text-white p-6 flex justify-between items-center rounded-t-2xl z-10">
             <h2 className="text-2xl font-bold">เพิ่มเอกสารใหม่</h2>
             <button
               onClick={onClose}
@@ -502,13 +556,13 @@ function DocumentForm({ onClose, onSubmit }) {
 
       {/* ✅ Loading Modal with Progress */}
       {loadingDetails && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50">
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-[9999]">
           <div className="bg-white rounded-2xl p-8 max-w-md w-full mx-4 shadow-2xl">
             <div className="text-center">
               {/* ✅ Animated Icon */}
               <div className="w-20 h-20 mx-auto mb-6 relative">
                 <div className="absolute inset-0 bg-blue-500 rounded-full animate-ping opacity-20"></div>
-                <div className="relative w-20 h-20 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-full flex items-center justify-center">
+                <div className="relative w-20 h-20 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-full flex items-center justify-center shadow-lg">
                   <svg className="w-10 h-10 text-white animate-spin" fill="none" viewBox="0 0 24 24">
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
@@ -521,38 +575,50 @@ function DocumentForm({ onClose, onSubmit }) {
                 กำลังประมวลผล OCR
               </h3>
               
-              {/* ✅ Subtitle */}
-              <p className="text-sm text-gray-600 mb-6">
-                {progress < 30 ? '🔍 กำลังวิเคราะห์เอกสาร...' : 
-                 progress < 60 ? '📝 กำลังแยกข้อความ...' : 
-                 progress < 90 ? '🔄 กำลังประมวลผลข้อมูล...' : 
-                 '✨ เกือบเสร็จแล้ว...'}
+              {/* ✅ Dynamic Message */}
+              <p className="text-sm text-gray-600 mb-6 min-h-[24px]">
+                {progressMessage || 'กำลังเตรียมการ...'}
               </p>
 
               {/* ✅ Progress Bar */}
-              <div className="w-full bg-gray-200 rounded-full h-3 mb-4 overflow-hidden">
+              <div className="w-full bg-gray-200 rounded-full h-3 mb-4 overflow-hidden shadow-inner">
                 <div 
-                  className="h-full bg-gradient-to-r from-blue-500 to-indigo-600 rounded-full transition-all duration-500 ease-out"
+                  className="h-full bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-500 rounded-full transition-all duration-700 ease-out relative"
                   style={{ width: `${progress}%` }}
-                ></div>
+                >
+                  {/* ✅ Shimmer Effect */}
+                  <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/40 to-transparent animate-shimmer"></div>
+                </div>
               </div>
 
-              {/* ✅ Percentage */}
+              {/* ✅ Percentage & Time */}
               <div className="flex items-center justify-between text-sm mb-4">
                 <span className="text-gray-600">ความคืบหน้า</span>
-                <span className="font-bold text-blue-600">{progress.toFixed(0)}%</span>
+                <span className="font-bold text-blue-600 tabular-nums">{progress.toFixed(0)}%</span>
               </div>
 
               {/* ✅ Time Estimate */}
-              <p className="text-xs text-gray-500 mb-4">
-                ⏱️ ใช้เวลาประมาณ 1-2 นาที (ขึ้นอยู่กับขนาดไฟล์)
-              </p>
+              <div className="flex items-center justify-center gap-2 text-xs text-gray-500 mb-4">
+                <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
+                <span>ใช้เวลาประมาณ 1-2 นาที</span>
+              </div>
 
-              {/* ✅ Warning */}
+              {/* ✅ Warning Box */}
               {progress > 0 && progress < 100 && (
-                <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
-                  <p className="text-xs text-yellow-800">
-                    ⚠️ กรุณาอย่าปิดหน้าต่างนี้ระหว่างประมวลผล
+                <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-lg animate-in fade-in">
+                  <p className="text-xs text-yellow-800 flex items-center justify-center gap-2">
+                    <span className="text-base">⚠️</span>
+                    กรุณาอย่าปิดหน้าต่างนี้ระหว่างประมวลผล
+                  </p>
+                </div>
+              )}
+
+              {/* ✅ Success Box */}
+              {progress === 100 && (
+                <div className="p-3 bg-green-50 border border-green-200 rounded-lg animate-in fade-in">
+                  <p className="text-xs text-green-800 flex items-center justify-center gap-2">
+                    <span className="text-base">✅</span>
+                    ประมวลผลเสร็จสมบูรณ์!
                   </p>
                 </div>
               )}
@@ -565,7 +631,7 @@ function DocumentForm({ onClose, onSubmit }) {
       <Modal
         isOpen={cropModalOpen}
         onRequestClose={() => setCropModalOpen(false)}
-        className="fixed inset-0 flex items-center justify-center p-4"
+        className="fixed inset-0 flex items-center justify-center p-4 z-[10000]"
         overlayClassName="fixed inset-0 bg-black/70"
       >
         <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden shadow-2xl">
