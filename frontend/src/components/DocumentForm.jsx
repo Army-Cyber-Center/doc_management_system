@@ -349,7 +349,7 @@ if (cropModalOpen) {
         setRotation(0);
         setFlipHorizontal(false);
         setFlipVertical(false);
-        setAspect(null);
+        setAspect(4 / 3);
         setShowFileOptions(true);
       }}
       className="fixed inset-0 flex items-center justify-center p-4"
@@ -366,7 +366,7 @@ if (cropModalOpen) {
               setRotation(0);
               setFlipHorizontal(false);
               setFlipVertical(false);
-              setAspect(null);
+              setAspect(4 / 3);
               setShowFileOptions(true);
             }}
             className="p-2 hover:bg-white/20 rounded-lg transition-colors"
@@ -408,20 +408,21 @@ if (cropModalOpen) {
         <div className="p-6 border-t bg-gray-50 space-y-6 max-h-[400px] overflow-y-auto">
           
           // ในส่วน Aspect Ratio buttons แก้เป็น:
+
           <div>
             <label className="text-sm font-semibold text-gray-700 mb-3 block">อัตราส่วน</label>
             <div className="grid grid-cols-6 gap-2">
-              {/* ✅ เพิ่มปุ่ม "อิสระ" */}
+              {/* ✅ เพิ่มปุ่ม "Header" (A4 กว้าง 20%) */}
               <button
                 type="button"
-                onClick={() => setAspect(null)} // ✅ null = ปรับได้อิสระ
+                onClick={() => setAspect(1 / 0.2828)} // 3.54:1
                 className={`px-3 py-2 rounded-lg text-sm font-medium transition-all ${
-                  aspect === null
-                    ? 'bg-green-600 text-white shadow-lg'
-                    : 'bg-white border-2 border-gray-200 text-gray-700 hover:border-blue-400'
+                  aspect === 1 / 0.2828
+                    ? 'bg-purple-600 text-white shadow-lg'
+                    : 'bg-white border-2 border-gray-200 text-gray-700 hover:border-purple-400'
                 }`}
               >
-                ✨ อิสระ
+                📄 Header
               </button>
               
               <button
@@ -484,6 +485,14 @@ if (cropModalOpen) {
                 9:16
               </button>
             </div>
+            
+            {/* ✅ เพิ่มคำอธิบาย */}
+            {aspect === 1 / 0.2828 && (
+              <p className="text-xs text-purple-600 mt-2 flex items-center gap-1">
+                <span>ℹ️</span>
+                <span>สำหรับครอปส่วนหัวเอกสาร (กว้างเท่ากระดาษ A4, สูง 20%)</span>
+              </p>
+            )}
           </div>
 
           {/* Zoom */}
@@ -558,23 +567,23 @@ if (cropModalOpen) {
             </div>
           </div>
 
-          {/* Reset */}
-          <div>
-            <button
-              type="button"
-              onClick={() => {
-                setZoom(1);
-                setRotation(0);
-                setFlipHorizontal(false);
-                setFlipVertical(false);
-                setAspect(null); // ✅ รีเซ็ตเป็น "อิสระ"
-                setCrop({ x: 0, y: 0 });
-              }}
-              className="w-full px-4 py-2 bg-gray-100 border-2 border-gray-300 text-gray-700 rounded-lg hover:bg-gray-200 transition-all text-sm font-medium"
-            >
-              🔄 รีเซ็ตทั้งหมด
-            </button>
-          </div>
+            {/* Reset */}
+            <div>
+              <button
+                type="button"
+                onClick={() => {
+                  setZoom(1);
+                  setRotation(0);
+                  setFlipHorizontal(false);
+                  setFlipVertical(false);
+                  setAspect(4 / 3); // ✅ เปลี่ยนจาก null เป็น 4/3
+                  setCrop({ x: 0, y: 0 });
+                }}
+                className="w-full px-4 py-2 bg-gray-100 border-2 border-gray-300 text-gray-700 rounded-lg hover:bg-gray-200 transition-all text-sm font-medium"
+              >
+                🔄 รีเซ็ตทั้งหมด
+              </button>
+            </div>
 
           {/* Action Buttons */}
           <div className="flex gap-3 pt-2">
@@ -586,7 +595,7 @@ if (cropModalOpen) {
                 setRotation(0);
                 setFlipHorizontal(false);
                 setFlipVertical(false);
-                setAspect(null);
+                setAspect(4 / 3);
                 setShowFileOptions(true);
               }}
               className="flex-1 px-6 py-3 border-2 border-gray-300 text-gray-700 rounded-xl font-semibold hover:bg-gray-50 transition-all"
