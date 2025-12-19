@@ -49,7 +49,7 @@ const parseOCRText = (extractedText) => {
   return result;
 };
 
-// ✅ แก้ไข: เพิ่ม onProgress + onMessage callback
+// ✅ waitForDocument function
 const waitForDocument = async (
   getDocument,
   id,
@@ -68,13 +68,11 @@ const waitForDocument = async (
     attempts++;
     const elapsed = Math.floor((Date.now() - start) / 1000);
     
-    // ✅ อัพเดต progress (0-90%)
     if (onProgress) {
       const progressPercent = Math.min((attempts / maxAttempts) * 90, 90);
       onProgress(progressPercent);
     }
 
-    // ✅ อัพเดตข้อความตามเวลา
     if (onMessage) {
       if (elapsed < 30) {
         onMessage('🔍 กำลังวิเคราะห์เอกสาร...');
@@ -136,14 +134,11 @@ function DocumentForm({ onClose, onSubmit }) {
   const [croppedAreaPixels, setCroppedAreaPixels] = useState(null);
   const [tempImage, setTempImage] = useState(null);
   
-  // ✅ เพิ่ม state สำหรับ progress + message
   const [progress, setProgress] = useState(0);
   const [progressMessage, setProgressMessage] = useState('');
 
-  // ✅ แก้ไข useEffect
   useEffect(() => {
     const fetchFullDocumentDetails = async () => {
-      // ✅ ตรวจสอบเงื่อนไข
       if (!result?.id) {
         console.log('❌ ไม่มี result.id');
         return;
@@ -161,7 +156,6 @@ function DocumentForm({ onClose, onSubmit }) {
       setProgressMessage('🔍 กำลังเตรียมการ...');
 
       try {
-        // ✅ รอจน DB พร้อม
         const data = await waitForDocument(
           getDocument, 
           result.id, 
@@ -170,12 +164,10 @@ function DocumentForm({ onClose, onSubmit }) {
             timeout: 240000
           },
           (progressPercent) => {
-            // ✅ อัพเดต progress
             setProgress(progressPercent);
             console.log(`📊 ความคืบหน้า: ${progressPercent.toFixed(0)}%`);
           },
           (message) => {
-            // ✅ อัพเดตข้อความ
             setProgressMessage(message);
             console.log(`💬 ${message}`);
           }
@@ -185,7 +177,6 @@ function DocumentForm({ onClose, onSubmit }) {
         setProgressMessage('✅ ประมวลผลสำเร็จ!');
         console.log('✅ ดึงข้อมูลสำเร็จ!', data);
 
-        // ✅ Parse OCR data
         const rawText = data.ocr_data?.extracted_text || '';
         const parsed = parseOCRText(rawText);
 
@@ -195,7 +186,6 @@ function DocumentForm({ onClose, onSubmit }) {
           full_raw_text: rawText
         });
 
-        // ✅ รอ 500ms แล้วปิด modal
         setTimeout(() => {
           setLoadingDetails(false);
           setProgress(0);
@@ -223,7 +213,6 @@ function DocumentForm({ onClose, onSubmit }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [result?.id]);
 
-  // ✅ Auto-fill form when documentDetails available
   useEffect(() => {
     if (documentDetails) {
       setFormData(prev => ({
@@ -241,18 +230,23 @@ function DocumentForm({ onClose, onSubmit }) {
   const handleFileSelect = async (file) => {
     if (!file) return;
 
+    console.log('📁 ไฟล์ที่เลือก:', file.name);
+    
     setFormData(prev => ({ ...prev, file, title: file.name }));
-    setShowFileOptions(false);
+    setShowFileOptions(false); // ✅ ซ่อน upload options
 
-    // ✅ Upload & OCR
     try {
+      console.log('🚀 เริ่มอัพโหลดไฟล์...');
       await processFile(file, {
         title: file.name,
         document_type: formData.type
       });
+      console.log('✅ อัพโหลดสำเร็จ');
     } catch (err) {
+      console.error('❌ อัพโหลดล้มเหลว:', err);
       alert('อัพโหลดไฟล์ไม่สำเร็จ: ' + err.message);
       reset();
+      setShowFileOptions(true); // ✅ แสดง upload options กลับมา
     }
   };
 
@@ -260,26 +254,31 @@ function DocumentForm({ onClose, onSubmit }) {
     const file = e.target.files?.[0];
     if (!file) return;
 
+    console.log('📸 ถ่ายรูปแล้ว');
+    
     const reader = new FileReader();
     reader.onload = () => {
       setTempImage(reader.result);
-      setCropModalOpen(true);
+      setCropModalOpen(true); // ✅ เปิด crop modal
     };
     reader.readAsDataURL(file);
   };
 
   const handleCropComplete = async () => {
     try {
+      console.log('✂️ กำลัง crop ภาพ...');
       const croppedBlob = await getCroppedImg(tempImage, croppedAreaPixels, 0);
       const croppedFile = new File([croppedBlob], 'cropped-image.jpg', { type: 'image/jpeg' });
       
-      setCropModalOpen(false);
+      setCropModalOpen(false); // ✅ ปิด crop modal ก่อน
       setTempImage(null);
       
+      console.log('✅ Crop สำเร็จ');
       await handleFileSelect(croppedFile);
     } catch (err) {
-      console.error(err);
+      console.error('❌ Crop ล้มเหลว:', err);
       alert('Crop ภาพไม่สำเร็จ');
+      setCropModalOpen(false);
     }
   };
 
@@ -316,8 +315,90 @@ function DocumentForm({ onClose, onSubmit }) {
     }
   };
 
+  // ✅ ถ้ากำลัง crop อยู่ ไม่แสดง main modal
+  if (cropModalOpen) {
+    return (
+      <Modal
+        isOpen={cropModalOpen}
+        onRequestClose={() => {
+          setCropModalOpen(false);
+          setTempImage(null);
+          setShowFileOptions(true); // ✅ กลับไปหน้า upload options
+        }}
+        className="fixed inset-0 flex items-center justify-center p-4"
+        overlayClassName="fixed inset-0 bg-black/80 z-[9999]"
+      >
+        <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden shadow-2xl">
+          <div className="p-4 border-b flex justify-between items-center">
+            <h3 className="text-lg font-bold">ปรับแต่งภาพ</h3>
+            <button
+              onClick={() => {
+                setCropModalOpen(false);
+                setTempImage(null);
+                setShowFileOptions(true);
+              }}
+              className="p-2 hover:bg-gray-100 rounded-lg"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+
+          <div className="relative h-96 bg-gray-900">
+            {tempImage && (
+              <Cropper
+                image={tempImage}
+                crop={crop}
+                zoom={zoom}
+                aspect={4 / 3}
+                onCropChange={setCrop}
+                onZoomChange={setZoom}
+                onCropComplete={(_, croppedAreaPixels) => setCroppedAreaPixels(croppedAreaPixels)}
+              />
+            )}
+          </div>
+
+          <div className="p-4 border-t">
+            <div className="mb-4">
+              <label className="text-sm font-medium text-gray-700 block mb-2">ซูม</label>
+              <input
+                type="range"
+                min={1}
+                max={3}
+                step={0.1}
+                value={zoom}
+                onChange={(e) => setZoom(parseFloat(e.target.value))}
+                className="w-full"
+              />
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => {
+                  setCropModalOpen(false);
+                  setTempImage(null);
+                  setShowFileOptions(true);
+                }}
+                className="flex-1 px-4 py-3 border-2 border-gray-300 text-gray-700 rounded-xl font-semibold hover:bg-gray-50 transition-all"
+              >
+                ยกเลิก
+              </button>
+              <button
+                onClick={handleCropComplete}
+                className="flex-1 px-4 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl font-semibold hover:shadow-lg transition-all flex items-center justify-center gap-2"
+              >
+                <CheckCircle className="w-5 h-5" />
+                ใช้ภาพนี้
+              </button>
+            </div>
+          </div>
+        </div>
+      </Modal>
+    );
+  }
+
   return (
     <>
+      {/* ✅ Main Modal */}
       <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
         <div className="bg-white rounded-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto shadow-2xl">
           {/* Header */}
@@ -332,8 +413,8 @@ function DocumentForm({ onClose, onSubmit }) {
           </div>
 
           <div className="p-6">
-            {/* File Upload Options */}
-            {showFileOptions && !processing && (
+            {/* ✅ File Upload Options - แสดงเฉพาะตอนยังไม่มีไฟล์ */}
+            {showFileOptions && !processing && !formData.file && (
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
                 <label className="cursor-pointer group">
                   <input
@@ -380,7 +461,7 @@ function DocumentForm({ onClose, onSubmit }) {
               </div>
             )}
 
-            {/* Processing Indicator */}
+            {/* ✅ Processing Indicator */}
             {processing && (
               <div className="bg-blue-50 border-2 border-blue-200 rounded-xl p-6 mb-6">
                 <div className="flex items-center gap-4">
@@ -393,7 +474,7 @@ function DocumentForm({ onClose, onSubmit }) {
               </div>
             )}
 
-            {/* Form */}
+            {/* ✅ Form - แสดงเฉพาะเมื่อมีไฟล์และไม่ processing */}
             {formData.file && !processing && (
               <form onSubmit={handleSubmit} className="space-y-6">
                 {/* Document Type */}
@@ -559,7 +640,6 @@ function DocumentForm({ onClose, onSubmit }) {
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-[9999]">
           <div className="bg-white rounded-2xl p-8 max-w-md w-full mx-4 shadow-2xl">
             <div className="text-center">
-              {/* ✅ Animated Icon */}
               <div className="w-20 h-20 mx-auto mb-6 relative">
                 <div className="absolute inset-0 bg-blue-500 rounded-full animate-ping opacity-20"></div>
                 <div className="relative w-20 h-20 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-full flex items-center justify-center shadow-lg">
@@ -570,40 +650,33 @@ function DocumentForm({ onClose, onSubmit }) {
                 </div>
               </div>
 
-              {/* ✅ Title */}
               <h3 className="text-xl font-bold text-gray-900 mb-2">
                 กำลังประมวลผล OCR
               </h3>
               
-              {/* ✅ Dynamic Message */}
               <p className="text-sm text-gray-600 mb-6 min-h-[24px]">
                 {progressMessage || 'กำลังเตรียมการ...'}
               </p>
 
-              {/* ✅ Progress Bar */}
               <div className="w-full bg-gray-200 rounded-full h-3 mb-4 overflow-hidden shadow-inner">
                 <div 
                   className="h-full bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-500 rounded-full transition-all duration-700 ease-out relative"
                   style={{ width: `${progress}%` }}
                 >
-                  {/* ✅ Shimmer Effect */}
                   <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/40 to-transparent animate-shimmer"></div>
                 </div>
               </div>
 
-              {/* ✅ Percentage & Time */}
               <div className="flex items-center justify-between text-sm mb-4">
                 <span className="text-gray-600">ความคืบหน้า</span>
                 <span className="font-bold text-blue-600 tabular-nums">{progress.toFixed(0)}%</span>
               </div>
 
-              {/* ✅ Time Estimate */}
               <div className="flex items-center justify-center gap-2 text-xs text-gray-500 mb-4">
                 <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
                 <span>ใช้เวลาประมาณ 1-2 นาที</span>
               </div>
 
-              {/* ✅ Warning Box */}
               {progress > 0 && progress < 100 && (
                 <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-lg animate-in fade-in">
                   <p className="text-xs text-yellow-800 flex items-center justify-center gap-2">
@@ -613,7 +686,6 @@ function DocumentForm({ onClose, onSubmit }) {
                 </div>
               )}
 
-              {/* ✅ Success Box */}
               {progress === 100 && (
                 <div className="p-3 bg-green-50 border border-green-200 rounded-lg animate-in fade-in">
                   <p className="text-xs text-green-800 flex items-center justify-center gap-2">
@@ -626,65 +698,6 @@ function DocumentForm({ onClose, onSubmit }) {
           </div>
         </div>
       )}
-
-      {/* Crop Modal */}
-      <Modal
-        isOpen={cropModalOpen}
-        onRequestClose={() => setCropModalOpen(false)}
-        className="fixed inset-0 flex items-center justify-center p-4 z-[10000]"
-        overlayClassName="fixed inset-0 bg-black/70"
-      >
-        <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden shadow-2xl">
-          <div className="p-4 border-b">
-            <h3 className="text-lg font-bold">ปรับแต่งภาพ</h3>
-          </div>
-
-          <div className="relative h-96 bg-gray-900">
-            {tempImage && (
-              <Cropper
-                image={tempImage}
-                crop={crop}
-                zoom={zoom}
-                aspect={4 / 3}
-                onCropChange={setCrop}
-                onZoomChange={setZoom}
-                onCropComplete={(_, croppedAreaPixels) => setCroppedAreaPixels(croppedAreaPixels)}
-              />
-            )}
-          </div>
-
-          <div className="p-4 border-t">
-            <div className="mb-4">
-              <label className="text-sm font-medium text-gray-700">ซูม</label>
-              <input
-                type="range"
-                min={1}
-                max={3}
-                step={0.1}
-                value={zoom}
-                onChange={(e) => setZoom(parseFloat(e.target.value))}
-                className="w-full"
-              />
-            </div>
-
-            <div className="flex gap-3">
-              <button
-                onClick={() => setCropModalOpen(false)}
-                className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
-              >
-                ยกเลิก
-              </button>
-              <button
-                onClick={handleCropComplete}
-                className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center justify-center gap-2"
-              >
-                <CheckCircle className="w-5 h-5" />
-                ใช้ภาพนี้
-              </button>
-            </div>
-          </div>
-        </div>
-      </Modal>
     </>
   );
 }
