@@ -859,21 +859,25 @@ function DocumentForm({ onClose, onSubmit }) {
                     placeholder="หน่วยงาน"
                   />
                 </div>
-
+                
                 <div className="flex gap-4 pt-4">
                   <button
                     type="button"
                     onClick={onClose}
-                    className="flex-1 px-6 py-3 border-2 border-gray-300 text-gray-700 rounded-xl font-semibold hover:bg-gray-50 transition-all"
+                    disabled={loadingDetails}
+                    className="flex-1 px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl font-semibold hover:shadow-lg hover:shadow-blue-500/30 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                   >
-                    ยกเลิก
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={processing || loadingDetails}
-                    className="flex-1 px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl font-semibold hover:shadow-lg hover:shadow-blue-500/30 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {loadingDetails ? 'กำลังประมวลผล...' : 'บันทึก'}
+                    {loadingDetails ? (
+                      <>
+                        <div className="animate-spin rounded-full h-5 w-5 border-2 border-white border-t-transparent"></div>
+                        <span>กำลังประมวลผล...</span>
+                      </>
+                    ) : (
+                      <>
+                        <CheckCircle className="w-5 h-5" />
+                        <span>เสร็จสิ้น</span>
+                      </>
+                    )}
                   </button>
                 </div>
               </form>
