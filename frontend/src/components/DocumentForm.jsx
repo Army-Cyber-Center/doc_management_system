@@ -136,7 +136,7 @@ function DocumentForm({ onClose, onSubmit }) {
   const [rotation, setRotation] = useState(0);
   const [flipHorizontal, setFlipHorizontal] = useState(false);
   const [flipVertical, setFlipVertical] = useState(false);
-  const [aspect, setAspect] = useState(null);
+  const [aspect, setAspect] = useState(4/3);
   
   const [progress, setProgress] = useState(0);
   const [progressMessage, setProgressMessage] = useState('');
@@ -414,7 +414,7 @@ if (cropModalOpen) {
               {/* ✅ เพิ่มปุ่ม "อิสระ" */}
               <button
                 type="button"
-                onClick={() => setAspect(4/3)} // ✅ null = ปรับได้อิสระ
+                onClick={() => setAspect(null)} // ✅ null = ปรับได้อิสระ
                 className={`px-3 py-2 rounded-lg text-sm font-medium transition-all ${
                   aspect === null
                     ? 'bg-green-600 text-white shadow-lg'
