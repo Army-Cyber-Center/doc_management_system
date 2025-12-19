@@ -67,7 +67,7 @@ const waitForDocument = async (
   while (Date.now() - start < timeout) {
     attempts++;
     const elapsed = Math.floor((Date.now() - start) / 1000);
-    
+
     if (onProgress) {
       const progressPercent = Math.min((attempts / maxAttempts) * 90, 90);
       onProgress(progressPercent);
@@ -136,8 +136,8 @@ function DocumentForm({ onClose, onSubmit }) {
   const [rotation, setRotation] = useState(0);
   const [flipHorizontal, setFlipHorizontal] = useState(false);
   const [flipVertical, setFlipVertical] = useState(false);
-  const [aspect, setAspect] = useState(4/3);
-  
+  const [aspect, setAspect] = useState(4 / 3);
+
   const [progress, setProgress] = useState(0);
   const [progressMessage, setProgressMessage] = useState('');
 
@@ -147,22 +147,22 @@ function DocumentForm({ onClose, onSubmit }) {
         console.log('❌ ไม่มี result.id');
         return;
       }
-      
+
       if (documentDetails?.ocr_id === result.id) {
         console.log('✅ มีข้อมูลแล้ว');
         return;
       }
 
       console.log('🚀 เริ่มต้นการประมวลผล OCR... ID:', result.id);
-      
+
       setLoadingDetails(true);
       setProgress(0);
       setProgressMessage('🔍 กำลังเตรียมการ...');
 
       try {
         const data = await waitForDocument(
-          getDocument, 
-          result.id, 
+          getDocument,
+          result.id,
           {
             interval: 3000,
             timeout: 240000
@@ -201,7 +201,7 @@ function DocumentForm({ onClose, onSubmit }) {
         setProgress(0);
         setProgressMessage('');
         setLoadingDetails(false);
-        
+
         alert(
           '⚠️ ระบบใช้เวลานานเกินไป (เกิน 4 นาที)\n\n' +
           'กรุณา:\n' +
@@ -235,7 +235,7 @@ function DocumentForm({ onClose, onSubmit }) {
     if (!file) return;
 
     console.log('📁 ไฟล์ที่เลือก:', file.name);
-    
+
     setFormData(prev => ({ ...prev, file, title: file.name }));
     setShowFileOptions(false);
 
@@ -259,7 +259,7 @@ function DocumentForm({ onClose, onSubmit }) {
     if (!file) return;
 
     console.log('📸 ถ่ายรูปแล้ว');
-    
+
     const reader = new FileReader();
     reader.onload = () => {
       setTempImage(reader.result);
@@ -276,16 +276,16 @@ function DocumentForm({ onClose, onSubmit }) {
         flipVertical,
         aspect
       });
-      
+
       const croppedBlob = await getCroppedImg(
         tempImage,
         croppedAreaPixels,
         rotation,
         { horizontal: flipHorizontal, vertical: flipVertical }
       );
-      
+
       const croppedFile = new File([croppedBlob], 'cropped-image.jpg', { type: 'image/jpeg' });
-      
+
       // ✅ Reset crop settings
       setCropModalOpen(false);
       setTempImage(null);
@@ -295,7 +295,7 @@ function DocumentForm({ onClose, onSubmit }) {
       setAspect(4 / 3);
       setCrop({ x: 0, y: 0 });
       setZoom(1);
-      
+
       console.log('✅ Crop สำเร็จ');
       await handleFileSelect(croppedFile);
     } catch (err) {
@@ -339,233 +339,225 @@ function DocumentForm({ onClose, onSubmit }) {
   };
 
 
-if (cropModalOpen) {
-  return (
-    <Modal
-      isOpen={cropModalOpen}
-      onRequestClose={() => {
-        setCropModalOpen(false);
-        setTempImage(null);
-        setRotation(0);
-        setFlipHorizontal(false);
-        setFlipVertical(false);
-        setAspect(4 / 3);
-        setShowFileOptions(true);
-      }}
-      className="fixed inset-0 flex items-center justify-center p-4"
-      overlayClassName="fixed inset-0 bg-black/90 z-[9999]"
-    >
-      <div className="bg-white rounded-2xl w-full max-w-4xl max-h-[95vh] overflow-hidden shadow-2xl flex flex-col">
-        {/* Header */}
-        <div className="p-4 border-b flex justify-between items-center bg-gradient-to-r from-blue-600 to-indigo-600">
-          <h3 className="text-lg font-bold text-white">ปรับแต่งภาพ</h3>
-          <button
-            onClick={() => {
-              setCropModalOpen(false);
-              setTempImage(null);
-              setRotation(0);
-              setFlipHorizontal(false);
-              setFlipVertical(false);
-              setAspect(4 / 3);
-              setShowFileOptions(true);
-            }}
-            className="p-2 hover:bg-white/20 rounded-lg transition-colors"
-          >
-            <X className="w-5 h-5 text-white" />
-          </button>
-        </div>
-
-        {/* ✅ Cropper Area - สี่เหลี่ยม + grid */}
-        <div className="relative bg-gray-900 flex-1" style={{ minHeight: '400px' }}>
-          {tempImage && (
-            <Cropper
-              image={tempImage}
-              crop={crop}
-              zoom={zoom}
-              aspect={aspect}
-              rotation={rotation}
-              onCropChange={setCrop}
-              onZoomChange={setZoom}
-              onCropComplete={(_, croppedAreaPixels) => setCroppedAreaPixels(croppedAreaPixels)}
-              // ✅ เพิ่ม props เหล่านี้
-              cropShape="rect"              // ✅ เปลี่ยนเป็นสี่เหลี่ยม (แทน "round")
-              showGrid={true}               // ✅ แสดง grid
-              objectFit="contain"           // ✅ แสดงภาพเต็ม
-              style={{
-                containerStyle: {
-                  backgroundColor: '#000'
-                },
-                cropAreaStyle: {
-                  border: '2px solid #3b82f6',  // สีน้ำเงิน
-                  color: 'rgba(59, 130, 246, 0.3)'  // สีพื้นหลังโปร่งแสง
-                }
+  if (cropModalOpen) {
+    return (
+      <Modal
+        isOpen={cropModalOpen}
+        onRequestClose={() => {
+          setCropModalOpen(false);
+          setTempImage(null);
+          setRotation(0);
+          setFlipHorizontal(false);
+          setFlipVertical(false);
+          setAspect(4 / 3);
+          setShowFileOptions(true);
+        }}
+        className="fixed inset-0 flex items-center justify-center p-4"
+        overlayClassName="fixed inset-0 bg-black/90 z-[9999]"
+      >
+        <div className="bg-white rounded-2xl w-full max-w-4xl max-h-[95vh] overflow-hidden shadow-2xl flex flex-col">
+          {/* Header */}
+          <div className="p-4 border-b flex justify-between items-center bg-gradient-to-r from-blue-600 to-indigo-600">
+            <h3 className="text-lg font-bold text-white">ปรับแต่งภาพ</h3>
+            <button
+              onClick={() => {
+                setCropModalOpen(false);
+                setTempImage(null);
+                setRotation(0);
+                setFlipHorizontal(false);
+                setFlipVertical(false);
+                setAspect(4 / 3);
+                setShowFileOptions(true);
               }}
-            />
-          )}
-        </div>
+              className="p-2 hover:bg-white/20 rounded-lg transition-colors"
+            >
+              <X className="w-5 h-5 text-white" />
+            </button>
+          </div>
 
-        {/* Controls */}
-        <div className="p-6 border-t bg-gray-50 space-y-6 max-h-[400px] overflow-y-auto">
-          
-          // ในส่วน Aspect Ratio buttons แก้เป็น:
-
-          <div>
-            <label className="text-sm font-semibold text-gray-700 mb-3 block">อัตราส่วน</label>
-            <div className="grid grid-cols-6 gap-2">
-              {/* ✅ เพิ่มปุ่ม "Header" (A4 กว้าง 20%) */}
-              <button
-                type="button"
-                onClick={() => setAspect(1 / 0.2828)} // 3.54:1
-                className={`px-3 py-2 rounded-lg text-sm font-medium transition-all ${
-                  aspect === 1 / 0.2828
-                    ? 'bg-purple-600 text-white shadow-lg'
-                    : 'bg-white border-2 border-gray-200 text-gray-700 hover:border-purple-400'
-                }`}
-              >
-                📄 Header
-              </button>
-              
-              <button
-                type="button"
-                onClick={() => setAspect(16 / 9)}
-                className={`px-3 py-2 rounded-lg text-sm font-medium transition-all ${
-                  aspect === 16 / 9
-                    ? 'bg-blue-600 text-white shadow-lg'
-                    : 'bg-white border-2 border-gray-200 text-gray-700 hover:border-blue-400'
-                }`}
-              >
-                16:9
-              </button>
-              
-              <button
-                type="button"
-                onClick={() => setAspect(4 / 3)}
-                className={`px-3 py-2 rounded-lg text-sm font-medium transition-all ${
-                  aspect === 4 / 3
-                    ? 'bg-blue-600 text-white shadow-lg'
-                    : 'bg-white border-2 border-gray-200 text-gray-700 hover:border-blue-400'
-                }`}
-              >
-                4:3
-              </button>
-              
-              <button
-                type="button"
-                onClick={() => setAspect(1)}
-                className={`px-3 py-2 rounded-lg text-sm font-medium transition-all ${
-                  aspect === 1
-                    ? 'bg-blue-600 text-white shadow-lg'
-                    : 'bg-white border-2 border-gray-200 text-gray-700 hover:border-blue-400'
-                }`}
-              >
-                1:1
-              </button>
-              
-              <button
-                type="button"
-                onClick={() => setAspect(3 / 4)}
-                className={`px-3 py-2 rounded-lg text-sm font-medium transition-all ${
-                  aspect === 3 / 4
-                    ? 'bg-blue-600 text-white shadow-lg'
-                    : 'bg-white border-2 border-gray-200 text-gray-700 hover:border-blue-400'
-                }`}
-              >
-                3:4
-              </button>
-              
-              <button
-                type="button"
-                onClick={() => setAspect(9 / 16)}
-                className={`px-3 py-2 rounded-lg text-sm font-medium transition-all ${
-                  aspect === 9 / 16
-                    ? 'bg-blue-600 text-white shadow-lg'
-                    : 'bg-white border-2 border-gray-200 text-gray-700 hover:border-blue-400'
-                }`}
-              >
-                9:16
-              </button>
-            </div>
-            
-            {/* ✅ เพิ่มคำอธิบาย */}
-            {aspect === 1 / 0.2828 && (
-              <p className="text-xs text-purple-600 mt-2 flex items-center gap-1">
-                <span>ℹ️</span>
-                <span>สำหรับครอปส่วนหัวเอกสาร (กว้างเท่ากระดาษ A4, สูง 20%)</span>
-              </p>
+          {/* ✅ Cropper Area - สี่เหลี่ยม + grid */}
+          <div className="relative bg-gray-900 flex-1" style={{ minHeight: '400px' }}>
+            {tempImage && (
+              <Cropper
+                image={tempImage}
+                crop={crop}
+                zoom={zoom}
+                aspect={aspect}
+                rotation={rotation}
+                onCropChange={setCrop}
+                onZoomChange={setZoom}
+                onCropComplete={(_, croppedAreaPixels) => setCroppedAreaPixels(croppedAreaPixels)}
+                // ✅ เพิ่ม props เหล่านี้
+                cropShape="rect"              // ✅ เปลี่ยนเป็นสี่เหลี่ยม (แทน "round")
+                showGrid={true}               // ✅ แสดง grid
+                objectFit="contain"           // ✅ แสดงภาพเต็ม
+                style={{
+                  containerStyle: {
+                    backgroundColor: '#000'
+                  },
+                  cropAreaStyle: {
+                    border: '2px solid #3b82f6',  // สีน้ำเงิน
+                    color: 'rgba(59, 130, 246, 0.3)'  // สีพื้นหลังโปร่งแสง
+                  }
+                }}
+              />
             )}
           </div>
 
-          {/* Zoom */}
-          <div>
-            <div className="flex justify-between items-center mb-2">
-              <label className="text-sm font-semibold text-gray-700">ซูม</label>
-              <span className="text-sm text-gray-600 font-mono">{zoom.toFixed(1)}x</span>
-            </div>
-            <input
-              type="range"
-              min={1}
-              max={3}
-              step={0.1}
-              value={zoom}
-              onChange={(e) => setZoom(parseFloat(e.target.value))}
-              className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
-            />
-          </div>
+          {/* Controls */}
+          <div className="p-6 border-t bg-gray-50 space-y-6 max-h-[400px] overflow-y-auto">
 
-          {/* Rotation */}
-          <div>
-            <div className="flex justify-between items-center mb-2">
-              <label className="text-sm font-semibold text-gray-700">หมุน</label>
-              <span className="text-sm text-gray-600 font-mono">{rotation}°</span>
+          // ในส่วน Aspect Ratio buttons แก้เป็น:
+
+            <div>
+              <label className="text-sm font-semibold text-gray-700 mb-3 block">อัตราส่วน</label>
+              <div className="grid grid-cols-6 gap-2">
+                {/* ✅ เพิ่มปุ่ม "Header" (A4 กว้าง 20%) */}
+                <button
+                  type="button"
+                  onClick={() => setAspect(1 / 0.2828)} // 3.54:1
+                  className={`px-3 py-2 rounded-lg text-sm font-medium transition-all ${aspect === 1 / 0.2828
+                      ? 'bg-purple-600 text-white shadow-lg'
+                      : 'bg-white border-2 border-gray-200 text-gray-700 hover:border-purple-400'
+                    }`}
+                >
+                  📄 Header
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setAspect(16 / 9)}
+                  className={`px-3 py-2 rounded-lg text-sm font-medium transition-all ${aspect === 16 / 9
+                      ? 'bg-blue-600 text-white shadow-lg'
+                      : 'bg-white border-2 border-gray-200 text-gray-700 hover:border-blue-400'
+                    }`}
+                >
+                  16:9
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setAspect(4 / 3)}
+                  className={`px-3 py-2 rounded-lg text-sm font-medium transition-all ${aspect === 4 / 3
+                      ? 'bg-blue-600 text-white shadow-lg'
+                      : 'bg-white border-2 border-gray-200 text-gray-700 hover:border-blue-400'
+                    }`}
+                >
+                  4:3
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setAspect(1)}
+                  className={`px-3 py-2 rounded-lg text-sm font-medium transition-all ${aspect === 1
+                      ? 'bg-blue-600 text-white shadow-lg'
+                      : 'bg-white border-2 border-gray-200 text-gray-700 hover:border-blue-400'
+                    }`}
+                >
+                  1:1
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setAspect(3 / 4)}
+                  className={`px-3 py-2 rounded-lg text-sm font-medium transition-all ${aspect === 3 / 4
+                      ? 'bg-blue-600 text-white shadow-lg'
+                      : 'bg-white border-2 border-gray-200 text-gray-700 hover:border-blue-400'
+                    }`}
+                >
+                  3:4
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setAspect(9 / 16)}
+                  className={`px-3 py-2 rounded-lg text-sm font-medium transition-all ${aspect === 9 / 16
+                      ? 'bg-blue-600 text-white shadow-lg'
+                      : 'bg-white border-2 border-gray-200 text-gray-700 hover:border-blue-400'
+                    }`}
+                >
+                  9:16
+                </button>
+              </div>
+
+              {/* ✅ เพิ่มคำอธิบาย */}
+              {aspect === 1 / 0.2828 && (
+                <p className="text-xs text-purple-600 mt-2 flex items-center gap-1">
+                  <span>ℹ️</span>
+                  <span>สำหรับครอปส่วนหัวเอกสาร (กว้างเท่ากระดาษ A4, สูง 20%)</span>
+                </p>
+              )}
             </div>
-            <div className="flex gap-2 items-center">
+
+            {/* Zoom */}
+            <div>
+              <div className="flex justify-between items-center mb-2">
+                <label className="text-sm font-semibold text-gray-700">ซูม</label>
+                <span className="text-sm text-gray-600 font-mono">{zoom.toFixed(1)}x</span>
+              </div>
               <input
                 type="range"
-                min={0}
-                max={360}
-                step={1}
-                value={rotation}
-                onChange={(e) => setRotation(parseInt(e.target.value))}
-                className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
+                min={1}
+                max={3}
+                step={0.1}
+                value={zoom}
+                onChange={(e) => setZoom(parseFloat(e.target.value))}
+                className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
               />
-              <button
-                type="button"
-                onClick={() => setRotation((rotation + 90) % 360)}
-                className="px-4 py-2 bg-white border-2 border-gray-200 rounded-lg hover:border-blue-400 transition-all text-sm font-medium"
-              >
-                🔄 90°
-              </button>
             </div>
-          </div>
 
-          {/* Flip */}
-          <div>
-            <label className="text-sm font-semibold text-gray-700 mb-3 block">พลิก</label>
-            <div className="flex gap-3">
-              <button
-                type="button"
-                onClick={() => setFlipHorizontal(!flipHorizontal)}
-                className={`flex-1 px-4 py-3 rounded-lg font-medium transition-all ${
-                  flipHorizontal
-                    ? 'bg-blue-600 text-white shadow-lg'
-                    : 'bg-white border-2 border-gray-200 text-gray-700 hover:border-blue-400'
-                }`}
-              >
-                ↔️ แนวนอน
-              </button>
-              <button
-                type="button"
-                onClick={() => setFlipVertical(!flipVertical)}
-                className={`flex-1 px-4 py-3 rounded-lg font-medium transition-all ${
-                  flipVertical
-                    ? 'bg-blue-600 text-white shadow-lg'
-                    : 'bg-white border-2 border-gray-200 text-gray-700 hover:border-blue-400'
-                }`}
-              >
-                ↕️ แนวตั้ง
-              </button>
+            {/* Rotation */}
+            <div>
+              <div className="flex justify-between items-center mb-2">
+                <label className="text-sm font-semibold text-gray-700">หมุน</label>
+                <span className="text-sm text-gray-600 font-mono">{rotation}°</span>
+              </div>
+              <div className="flex gap-2 items-center">
+                <input
+                  type="range"
+                  min={0}
+                  max={360}
+                  step={1}
+                  value={rotation}
+                  onChange={(e) => setRotation(parseInt(e.target.value))}
+                  className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
+                />
+                <button
+                  type="button"
+                  onClick={() => setRotation((rotation + 90) % 360)}
+                  className="px-4 py-2 bg-white border-2 border-gray-200 rounded-lg hover:border-blue-400 transition-all text-sm font-medium"
+                >
+                  🔄 90°
+                </button>
+              </div>
             </div>
-          </div>
+
+            {/* Flip */}
+            <div>
+              <label className="text-sm font-semibold text-gray-700 mb-3 block">พลิก</label>
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setFlipHorizontal(!flipHorizontal)}
+                  className={`flex-1 px-4 py-3 rounded-lg font-medium transition-all ${flipHorizontal
+                      ? 'bg-blue-600 text-white shadow-lg'
+                      : 'bg-white border-2 border-gray-200 text-gray-700 hover:border-blue-400'
+                    }`}
+                >
+                  ↔️ แนวนอน
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFlipVertical(!flipVertical)}
+                  className={`flex-1 px-4 py-3 rounded-lg font-medium transition-all ${flipVertical
+                      ? 'bg-blue-600 text-white shadow-lg'
+                      : 'bg-white border-2 border-gray-200 text-gray-700 hover:border-blue-400'
+                    }`}
+                >
+                  ↕️ แนวตั้ง
+                </button>
+              </div>
+            </div>
 
             {/* Reset */}
             <div>
@@ -585,37 +577,37 @@ if (cropModalOpen) {
               </button>
             </div>
 
-          {/* Action Buttons */}
-          <div className="flex gap-3 pt-2">
-            <button
-              type="button"
-              onClick={() => {
-                setCropModalOpen(false);
-                setTempImage(null);
-                setRotation(0);
-                setFlipHorizontal(false);
-                setFlipVertical(false);
-                setAspect(4 / 3);
-                setShowFileOptions(true);
-              }}
-              className="flex-1 px-6 py-3 border-2 border-gray-300 text-gray-700 rounded-xl font-semibold hover:bg-gray-50 transition-all"
-            >
-              ยกเลิก
-            </button>
-            <button
-              type="button"
-              onClick={handleCropComplete}
-              className="flex-1 px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl font-semibold hover:shadow-lg transition-all flex items-center justify-center gap-2"
-            >
-              <CheckCircle className="w-5 h-5" />
-              ใช้ภาพนี้
-            </button>
+            {/* Action Buttons */}
+            <div className="flex gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setCropModalOpen(false);
+                  setTempImage(null);
+                  setRotation(0);
+                  setFlipHorizontal(false);
+                  setFlipVertical(false);
+                  setAspect(4 / 3);
+                  setShowFileOptions(true);
+                }}
+                className="flex-1 px-6 py-3 border-2 border-gray-300 text-gray-700 rounded-xl font-semibold hover:bg-gray-50 transition-all"
+              >
+                ยกเลิก
+              </button>
+              <button
+                type="button"
+                onClick={handleCropComplete}
+                className="flex-1 px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl font-semibold hover:shadow-lg transition-all flex items-center justify-center gap-2"
+              >
+                <CheckCircle className="w-5 h-5" />
+                ใช้ภาพนี้
+              </button>
+            </div>
           </div>
         </div>
-      </div>
-    </Modal>
-  );
-}
+      </Modal>
+    );
+  }
 
   return (
     <>
@@ -846,11 +838,36 @@ if (cropModalOpen) {
         </div>
       </div>
 
-      {/* ✅ Loading Modal */}
+      {/* ✅ Loading Modal with Close Button */}
       {loadingDetails && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-[9999]">
-          <div className="bg-white rounded-2xl p-8 max-w-md w-full mx-4 shadow-2xl">
+          <div className="bg-white rounded-2xl p-8 max-w-md w-full mx-4 shadow-2xl relative">
+            {/* ✅ ปุ่มปิด (มุมขวาบน) */}
+            <button
+              onClick={() => {
+                // ✅ ยืนยันก่อนปิด
+                if (window.confirm(
+                  '⚠️ การปิดหน้าต่างจะยกเลิกการประมวลผล OCR\n\n' +
+                  'คุณต้องการปิดหรือไม่?'
+                )) {
+                  console.log('❌ ผู้ใช้ยกเลิกการประมวลผล OCR');
+                  setLoadingDetails(false);
+                  setProgress(0);
+                  setProgressMessage('');
+                  // ✅ รีเซ็ตกลับไปหน้า upload
+                  setShowFileOptions(true);
+                  setFormData(prev => ({ ...prev, file: null }));
+                  reset();
+                }
+              }}
+              className="absolute top-4 right-4 p-2 hover:bg-gray-100 rounded-lg transition-colors group"
+              title="ปิดและยกเลิก"
+            >
+              <X className="w-5 h-5 text-gray-400 group-hover:text-red-600 transition-colors" />
+            </button>
+
             <div className="text-center">
+              {/* Animated Icon */}
               <div className="w-20 h-20 mx-auto mb-6 relative">
                 <div className="absolute inset-0 bg-blue-500 rounded-full animate-ping opacity-20"></div>
                 <div className="relative w-20 h-20 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-full flex items-center justify-center shadow-lg">
@@ -861,11 +878,19 @@ if (cropModalOpen) {
                 </div>
               </div>
 
-              <h3 className="text-xl font-bold text-gray-900 mb-2">กำลังประมวลผล OCR</h3>
-              <p className="text-sm text-gray-600 mb-6 min-h-[24px]">{progressMessage || 'กำลังเตรียมการ...'}</p>
+              {/* Title */}
+              <h3 className="text-xl font-bold text-gray-900 mb-2">
+                กำลังประมวลผล OCR
+              </h3>
 
+              {/* Dynamic Message */}
+              <p className="text-sm text-gray-600 mb-6 min-h-[24px]">
+                {progressMessage || 'กำลังเตรียมการ...'}
+              </p>
+
+              {/* Progress Bar */}
               <div className="w-full bg-gray-200 rounded-full h-3 mb-4 overflow-hidden shadow-inner">
-                <div 
+                <div
                   className="h-full bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-500 rounded-full transition-all duration-700 ease-out relative"
                   style={{ width: `${progress}%` }}
                 >
@@ -873,25 +898,29 @@ if (cropModalOpen) {
                 </div>
               </div>
 
+              {/* Percentage & Time */}
               <div className="flex items-center justify-between text-sm mb-4">
                 <span className="text-gray-600">ความคืบหน้า</span>
                 <span className="font-bold text-blue-600 tabular-nums">{progress.toFixed(0)}%</span>
               </div>
 
+              {/* Time Estimate */}
               <div className="flex items-center justify-center gap-2 text-xs text-gray-500 mb-4">
                 <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
                 <span>ใช้เวลาประมาณ 1-2 นาที</span>
               </div>
 
+              {/* Warning Box */}
               {progress > 0 && progress < 100 && (
-                <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-lg animate-in fade-in">
+                <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-lg animate-in fade-in mb-3">
                   <p className="text-xs text-yellow-800 flex items-center justify-center gap-2">
                     <span className="text-base">⚠️</span>
-                    กรุณาอย่าปิดหน้าต่างนี้ระหว่างประมวลผล
+                    การปิดหน้าต่างจะยกเลิกการประมวลผล
                   </p>
                 </div>
               )}
 
+              {/* Success Box */}
               {progress === 100 && (
                 <div className="p-3 bg-green-50 border border-green-200 rounded-lg animate-in fade-in">
                   <p className="text-xs text-green-800 flex items-center justify-center gap-2">
@@ -900,10 +929,34 @@ if (cropModalOpen) {
                   </p>
                 </div>
               )}
+
+              {/* ✅ ปุ่มยกเลิกด้านล่าง (สำหรับผู้ใช้ที่มองไม่เห็นปุ่มมุมบน) */}
+              {progress < 100 && (
+                <button
+                  onClick={() => {
+                    if (window.confirm(
+                      '⚠️ การยกเลิกจะหยุดการประมวลผล OCR\n\n' +
+                      'คุณต้องการยกเลิกหรือไม่?'
+                    )) {
+                      console.log('❌ ผู้ใช้ยกเลิกการประมวลผล OCR');
+                      setLoadingDetails(false);
+                      setProgress(0);
+                      setProgressMessage('');
+                      setShowFileOptions(true);
+                      setFormData(prev => ({ ...prev, file: null }));
+                      reset();
+                    }
+                  }}
+                  className="mt-4 w-full px-4 py-2 border-2 border-red-200 text-red-600 rounded-lg hover:bg-red-50 transition-all text-sm font-medium"
+                >
+                  ❌ ยกเลิกการประมวลผล
+                </button>
+              )}
             </div>
           </div>
         </div>
       )}
+
     </>
   );
 }
