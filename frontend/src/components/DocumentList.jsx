@@ -25,11 +25,11 @@ function DocumentList({
   const [ocrLoading, setOcrLoading] = useState(false);
   const [ocrError, setOcrError] = useState(null);
 
-  // ✅ Statistics state - 4 steps
+  // ✅ Statistics state - 4 unified steps
   const [stats, setStats] = useState({
-    incoming: 0,        // Step 1: เอกสารรับเข้า
-    processing: 0,      // Step 2: กำลังดำเนินการ
-    sent_out: 0,        // Step 3: เอกสารส่งออก
+    received: 0,        // Step 1: รับเข้า
+    approval: 0,        // Step 2: รออนุมัติ
+    sent_out: 0,        // Step 3: ส่งออก
     completed: 0        // Step 4: เสร็จสิ้น
   });
 
@@ -140,43 +140,65 @@ function DocumentList({
     }
   };
 
-/**
- * ✅ Calculate document statistics (4 steps)
- */
-const calculateStats = (documentsList) => {
-  const newStats = {
-    incoming: 0,        // Step 1: รับแล้ว (summary)
-    processing: 0,      // Step 2: กำลังดำเนินการ
-    sent_out: 0,        // Step 3: เอกสารส่งออก
-    completed: 0        // Step 4: เสร็จสิ้น
+  /**
+   * ✅ Normalize status to unified format
+   */
+  const normalizeStatus = (status) => {
+    if (!status) return 'รับเข้า';
+    
+    const normalized = status.toLowerCase().trim();
+    
+    // Map all variants to unified status
+    if (normalized === 'รับแล้ว' || normalized === 'received' || normalized === 'incoming' || normalized === 'processed') {
+      return 'รับเข้า';
+    }
+    if (normalized === 'รออนุมัติ' || normalized === 'pending approval' || normalized === 'approval pending' || normalized === 'กำลังดำเนินการ' || normalized === 'in_progress') {
+      return 'รออนุมัติ';
+    }
+    if (normalized === 'ส่งออก' || normalized === 'sent out' || normalized === 'sent_out' || normalized === 'เอกสารส่งออก') {
+      return 'ส่งออก';
+    }
+    if (normalized === 'เสร็จสิ้น' || normalized === 'completed' || normalized === 'done') {
+      return 'เสร็จสิ้น';
+    }
+    
+    return 'รับเข้า'; // default
   };
 
-  // 1️⃣ นับเฉพาะสถานะจริงจากเอกสาร
-  documentsList.forEach(doc => {
-    const status = doc.status;
+  /**
+   * ✅ Calculate document statistics (4 unified steps)
+   */
+  const calculateStats = (documentsList) => {
+    const newStats = {
+      received: 0,        // Step 1: รับเข้า
+      approval: 0,        // Step 2: รออนุมัติ
+      sent_out: 0,        // Step 3: ส่งออก
+      completed: 0        // Step 4: เสร็จสิ้น
+    };
 
-    if (status === 'กำลังดำเนินการ' || status === 'in_progress') {
-      newStats.processing++;
-    } 
-    else if (status === 'เอกสารส่งออก' || status === 'sent_out') {
-      newStats.sent_out++;
-    } 
-    else if (status === 'เสร็จสิ้น' || status === 'completed') {
-      newStats.completed++;
-    }
-  });
+    // 1️⃣ นับเฉพาะสถานะจริงจากเอกสาร
+    documentsList.forEach(doc => {
+      const normalizedStatus = normalizeStatus(doc.status);
 
-  // 2️⃣ รับแล้ว = รวม 3 สถานะด้านบน
-  newStats.incoming =
-    newStats.processing +
-    newStats.sent_out +
-    newStats.completed;
+      if (normalizedStatus === 'รับเข้า') {
+        newStats.received++;
+      } 
+      else if (normalizedStatus === 'รออนุมัติ') {
+        newStats.approval++;
+      } 
+      else if (normalizedStatus === 'ส่งออก') {
+        newStats.sent_out++;
+      } 
+      else if (normalizedStatus === 'เสร็จสิ้น') {
+        newStats.completed++;
+      }
+    });
 
-  console.log('📊 Statistics:', newStats);
+    console.log('📊 Statistics:', newStats);
 
-  // 3️⃣ อัปเดต state
-  setStats(newStats);
-};
+    // 2️⃣ อัปเดต state
+    setStats(newStats);
+  };
 
 
   /**
@@ -243,18 +265,16 @@ const calculateStats = (documentsList) => {
   const isLoading = activeTab === 'incoming' ? ocrLoading : loading;
 
   const getStatusColor = (status) => {
-    switch (status) {
-      case 'รับแล้ว':
-      case 'incoming':
+    const normalizedStatus = normalizeStatus(status);
+    
+    switch (normalizedStatus) {
+      case 'รับเข้า':
         return 'bg-gradient-to-r from-blue-500 to-cyan-500 text-white';
-      case 'กำลังดำเนินการ':
-      case 'in_progress':
+      case 'รออนุมัติ':
         return 'bg-gradient-to-r from-orange-400 to-amber-400 text-white';
-      case 'เอกสารส่งออก':
-      case 'sent_out':
+      case 'ส่งออก':
         return 'bg-gradient-to-r from-green-500 to-emerald-500 text-white';
       case 'เสร็จสิ้น':
-      case 'completed':
         return 'bg-gradient-to-r from-purple-500 to-violet-500 text-white';
       default:
         return 'bg-gray-200 text-gray-800';
@@ -265,10 +285,14 @@ const calculateStats = (documentsList) => {
     switch (priority) {
       case 'ด่วนที่สุด':
       case 'ด่วนมาก':
+      case 'urgent':
+      case 'high':
         return 'text-red-500';
       case 'ด่วน':
+      case 'medium':
         return 'text-orange-500';
       case 'ปกติ':
+      case 'normal':
         return 'text-green-500';
       default:
         return 'text-gray-500';
@@ -307,24 +331,24 @@ const calculateStats = (documentsList) => {
 
   return (
     <div className="space-y-6">
-      {/* ✅ Statistics Dashboard - 4 Steps */}
+      {/* ✅ Statistics Dashboard - 4 Unified Steps */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <StatCard
           icon={Inbox}
-          label="เอกสารรับเข้า"
-          value={stats.incoming}
+          label="รับเข้า"
+          value={stats.received}
           color="bg-gradient-to-br from-blue-500 to-blue-600"
         />
         <StatCard
           icon={Clock}
-          label="กำลังดำเนินการ"
-          value={stats.processing}
+          label="รออนุมัติ"
+          value={stats.approval}
           color="bg-gradient-to-br from-orange-500 to-orange-600"
         />
 
         <StatCard
           icon={Send}
-          label="เอกสารส่งออก"
+          label="ส่งออก"
           value={stats.sent_out}
           color="bg-gradient-to-br from-green-500 to-green-600"
         />
@@ -409,7 +433,7 @@ const calculateStats = (documentsList) => {
               const from = doc.from_department || doc.from || doc.department || 'ไม่ระบุ';
               const date = doc.document_date || doc.date || new Date().toLocaleDateString('th-TH');
               const priority = doc.priority || 'ปกติ';
-              const status = doc.status || 'รับแล้ว';
+              const status = normalizeStatus(doc.status || 'รับเข้า');
               const documentId = doc.id || doc.document_id;
 
               return (
@@ -439,6 +463,10 @@ const calculateStats = (documentsList) => {
                         <span className="flex items-center gap-2 whitespace-nowrap">
                           <Calendar className="w-4 h-4 flex-shrink-0" />
                           {date}
+                        </span>
+
+                        <span className={`px-2.5 py-1 rounded-lg text-xs font-medium ${getStatusColor(status)}`}>
+                          {status}
                         </span>
 
                         {doc.dueDate && (
