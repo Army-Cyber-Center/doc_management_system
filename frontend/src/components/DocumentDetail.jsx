@@ -1,11 +1,14 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { X, User, Calendar, FileText, Edit, TrendingUp, Save } from 'lucide-react';
 
-const API_URL = 'http://localhost:8000/api';
-
 function DocumentDetail({ document, onClose, onUpdate }) {
+  const API_URL = 'http://192.168.2.10:8000/api/v1';
+  
   console.log('🔍 DocumentDetail received:', document);
   
+  const [workflowHistory, setWorkflowHistory] = useState([]);
+  const [loadingWorkflow, setLoadingWorkflow] = useState(false);
+
   const normalizedDoc = {
     id: document.id,
     title: document.title,
@@ -20,29 +23,55 @@ function DocumentDetail({ document, onClose, onUpdate }) {
     status: document.status === 'processed' ? 'รับเข้า' : document.status,
     created_at: document.created_at,
     file_path: document.file_path,
-    completed_by_name: document.completed_by_name || document.completed_by || ''
+    completed_by_name: document.completed_by_name || ''
   };
 
-  console.log('✅ Normalized:', normalizedDoc);
+  useEffect(() => {
+    const fetchWorkflowHistory = async () => {
+      setLoadingWorkflow(true);
+      try {
+        const token = localStorage.getItem('access_token');
+        if (!token) return;
+
+        const headers = {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        };
+
+        const response = await fetch(`${API_URL}/workflows/document/${document.id}`, {
+          method: 'GET',
+          headers
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          console.log('📋 Workflow History:', data);
+          setWorkflowHistory(Array.isArray(data.workflows) ? data.workflows : data.workflows || []);
+        }
+      } catch (error) {
+        console.error('❌ Failed to fetch workflow history:', error);
+      } finally {
+        setLoadingWorkflow(false);
+      }
+    };
+
+    if (document.id) {
+      fetchWorkflowHistory();
+    }
+  }, [document.id, API_URL]);
+
+  const getCompletedByName = () => {
+    const completeWorkflow = workflowHistory.find(w => w.action === 'complete');
+    return completeWorkflow?.completed_by_name || normalizedDoc.completed_by_name || '';
+  };
 
   const normalizeStatus = (status) => {
     if (!status) return 'รับเข้า';
-    
     const normalized = status.toLowerCase().trim();
-    
-    if (normalized === 'รับแล้ว' || normalized === 'received' || normalized === 'incoming' || normalized === 'processed') {
-      return 'รับเข้า';
-    }
-    if (normalized === 'รออนุมัติ' || normalized === 'pending approval' || normalized === 'approval pending' || normalized === 'กำลังดำเนินการ' || normalized === 'in_progress') {
-      return 'รออนุมัติ';
-    }
-    if (normalized === 'ส่งออก' || normalized === 'sent out' || normalized === 'sent_out' || normalized === 'เอกสารส่งออก') {
-      return 'ส่งออก';
-    }
-    if (normalized === 'เสร็จสิ้น' || normalized === 'completed' || normalized === 'done') {
-      return 'เสร็จสิ้น';
-    }
-    
+    if (normalized === 'รับแล้ว' || normalized === 'received' || normalized === 'incoming' || normalized === 'processed') return 'รับเข้า';
+    if (normalized === 'รออนุมัติ' || normalized === 'pending approval' || normalized === 'approval pending' || normalized === 'กำลังดำเนินการ' || normalized === 'in_progress') return 'รออนุมัติ';
+    if (normalized === 'ส่งออก' || normalized === 'sent out' || normalized === 'sent_out' || normalized === 'เอกสารส่งออก') return 'ส่งออก';
+    if (normalized === 'เสร็จสิ้น' || normalized === 'completed' || normalized === 'done') return 'เสร็จสิ้น';
     return 'รับเข้า';
   };
 
@@ -61,7 +90,11 @@ function DocumentDetail({ document, onClose, onUpdate }) {
   });
 
   const [currentStatus, setCurrentStatus] = useState(normalizeStatus(normalizedDoc.status));
-  const [completedByName, setCompletedByName] = useState(normalizedDoc.completed_by_name || '');
+  const [completedByName, setCompletedByName] = useState(() => getCompletedByName());
+
+  useEffect(() => {
+    setCompletedByName(getCompletedByName());
+  }, [workflowHistory]);
 
   const handleUnauthorized = () => {
     console.error('🔐 Token expired or invalid');
@@ -72,13 +105,10 @@ function DocumentDetail({ document, onClose, onUpdate }) {
 
   const getAuthHeaders = () => {
     const token = localStorage.getItem('access_token');
-    
     if (!token) {
-      console.warn('⚠️ No access token found');
       handleUnauthorized();
-      throw new Error('Authentication required. Please log in.');
+      throw new Error('Authentication required.');
     }
-
     return {
       'Authorization': `Bearer ${token}`,
       'Content-Type': 'application/json'
@@ -93,80 +123,162 @@ function DocumentDetail({ document, onClose, onUpdate }) {
 
   const handleUpdateWorkflow = async () => {
     setIsLoading(true);
-
     try {
       const headers = getAuthHeaders();
-
       const getNextAction = () => {
-        if (isStatusActive('รับเข้า')) {
-          return { action: 'process', nextStatus: 'รออนุมัติ' };
-        }
-
-        if (isStatusActive('รออนุมัติ')) {
-          return { action: 'send_out', nextStatus: 'ส่งออก' };
-        }
-
-        if (isStatusActive('ส่งออก')) {
-          return { action: 'complete', nextStatus: 'เสร็จสิ้น' };
-        }
-
+        if (isStatusActive('รับเข้า')) return { action: 'process', nextStatus: 'รออนุมัติ', stepNumber: 2 };
+        if (isStatusActive('รออนุมัติ')) return { action: 'send_out', nextStatus: 'ส่งออก', stepNumber: 3 };
+        if (isStatusActive('ส่งออก')) return { action: 'complete', nextStatus: 'เสร็จสิ้น', stepNumber: 4 };
         return null;
       };
 
       const next = getNextAction();
-      if (!next) return;
-
-      if (next.action === 'complete' && !completedByName.trim()) {
-        alert('⚠️ กรุณากรอกชื่อผู้ดำเนินการก่อนกดปุ่มทำเสร็จสิ้น');
+      if (!next) {
+        alert('⚠️ ไม่สามารถอัพเดทสถานะได้');
         setIsLoading(false);
         return;
       }
 
-      const payload = {
-        document_id: document.id,
+      if (next.action === 'complete' && !completedByName.trim()) {
+        alert('⚠️ กรุณากรอกชื่อผู้ดำเนินการก่อนทำเสร็จสิ้น');
+        setIsLoading(false);
+        return;
+      }
+
+      console.log('🔄 Starting update process...');
+      console.log('📋 Document ID:', document.document_id);
+      console.log('📋 Current Status:', currentStatus);
+      console.log('📋 Next Status:', next.nextStatus);
+      console.log('📋 Action:', next.action);
+
+      // ✅ 1. อัพเดท workflows table ก่อน (สร้าง record ใหม่)
+      const workflowPayload = {
+        document_id: parseInt(document.document_id),
+        step_number: next.stepNumber+1,
         action: next.action,
+        user_id: 3, // ใส่ user_id ตามที่ login
         comment: `เปลี่ยนสถานะเป็น ${next.nextStatus}`,
-        completed_by_name: next.action === 'complete' ? completedByName.trim() : undefined
+        completed_by_name: next.action === 'complete' ? completedByName.trim() : null,
+        status: next.nextStatus === 'เสร็จสิ้น' ? 'completed' : next.nextStatus
       };
 
-      console.log('📤 Workflow payload:', payload);
+      console.log('📤 Workflow payload:', JSON.stringify(workflowPayload, null, 2));
 
-      const response = await fetch(`${API_URL}/workflows/`, {
+      // ลอง POST ก่อน (สร้าง record ใหม่)
+      const workflowResponse = await fetch(`${API_URL}/workflows/`, {
         method: 'POST',
         headers,
-        body: JSON.stringify(payload)
+        body: JSON.stringify(workflowPayload)
       });
 
-      if (response.status === 401) {
+      console.log('📥 Workflow response status:', workflowResponse.status);
+
+      if (workflowResponse.status === 401) {
         handleUnauthorized();
         return;
       }
 
-      if (response.status === 422) {
-        const errorText = await response.text();
-        console.error('❌ Validation Error (422):', errorText);
-        throw new Error(errorText);
+      let workflowSuccess = false;
+      if (workflowResponse.ok) {
+        const workflowData = await workflowResponse.json();
+        console.log('✅ Workflow created:', workflowData);
+        workflowSuccess = true;
+      } else {
+        const errorText = await workflowResponse.text();
+        console.error('❌ Workflow error:', errorText);
+        
+        // ถ้า POST ไม่ได้ ลอง PUT
+        console.log('🔄 Trying PUT instead...');
+        const workflowPutResponse = await fetch(`${API_URL}/workflows/${document.id}`, {
+          method: 'PUT',
+          headers,
+          body: JSON.stringify(workflowPayload)
+        });
+
+        if (workflowPutResponse.ok) {
+          const workflowData = await workflowPutResponse.json();
+          console.log('✅ Workflow updated with PUT:', workflowData);
+          workflowSuccess = true;
+        } else {
+          const putErrorText = await workflowPutResponse.text();
+          console.error('❌ Workflow PUT also failed:', putErrorText);
+        }
       }
 
-      if (!response.ok) {
-        throw new Error(`HTTP error ${response.status}`);
-      }
+      // ✅ 2. อัพเดท documents table
+      const docPayload = {
+        status: next.nextStatus,
+        completed_by_name: next.action === 'complete' ? completedByName.trim() : null
+      };
 
-      await response.json();
+      console.log('📤 Document payload:', JSON.stringify(docPayload, null, 2));
 
-      setCurrentStatus(next.nextStatus);
-      await onUpdate(document.id, { 
-        status: next.nextStatus, 
-        completed_by_name: completedByName.trim() 
+      const docResponse = await fetch(`${API_URL}/documents/${document.id}`, {
+        method: 'PUT',
+        headers,
+        body: JSON.stringify(docPayload)
       });
 
-      setTimeout(() => {
-        onClose();
-        window.location.reload();
-      }, 1000);
+      console.log('📥 Document response status:', docResponse.status);
+
+      if (docResponse.status === 401) {
+        handleUnauthorized();
+        return;
+      }
+
+      if (docResponse.status === 422) {
+        const errorText = await docResponse.text();
+        console.error('❌ Document validation error:', errorText);
+        throw new Error('Validation error: ' + errorText);
+      }
+
+      let docSuccess = false;
+      if (docResponse.ok) {
+        const docData = await docResponse.json();
+        console.log('✅ Document updated:', docData);
+        docSuccess = true;
+      } else {
+        const errorText = await docResponse.text();
+        console.error('❌ Document error:', errorText);
+        
+        // ลอง PATCH แทน
+        console.log('🔄 Trying PATCH instead...');
+        const docPatchResponse = await fetch(`${API_URL}/documents/${document.id}`, {
+          method: 'PATCH',
+          headers,
+          body: JSON.stringify(docPayload)
+        });
+
+        if (docPatchResponse.ok) {
+          const docData = await docPatchResponse.json();
+          console.log('✅ Document updated with PATCH:', docData);
+          docSuccess = true;
+        } else {
+          const patchErrorText = await docPatchResponse.text();
+          console.error('❌ Document PATCH also failed:', patchErrorText);
+          throw new Error('Failed to update document: ' + patchErrorText);
+        }
+      }
+
+      if (docSuccess || workflowSuccess) {
+        setCurrentStatus(next.nextStatus);
+        await onUpdate(document.id, { 
+          status: next.nextStatus, 
+          completed_by_name: next.action === 'complete' ? completedByName.trim() : null 
+        });
+
+        // alert('✅ อัพเดทสถานะสำเร็จ');
+        
+        setTimeout(() => {
+          onClose();
+          window.location.reload();
+        }, 1000);
+      } else {
+        throw new Error('ไม่สามารถอัพเดทข้อมูลได้');
+      }
 
     } catch (error) {
-      console.error('❌ Workflow update failed:', error);
+      console.error('❌ Status update failed:', error);
       alert('อัพเดทสถานะล้มเหลว: ' + error.message);
     } finally {
       setIsLoading(false);
@@ -174,11 +286,10 @@ function DocumentDetail({ document, onClose, onUpdate }) {
   };
 
   const handleSave = async () => {
-    console.log('💾 กำลังบันทึก:', editData);
+    console.log('💾 บันทึก:', editData);
     setIsLoading(true);
     try {
       const headers = getAuthHeaders();
-      
       const payload = {
         document_id: document.id,
         title: editData.title,
@@ -189,35 +300,24 @@ function DocumentDetail({ document, onClose, onUpdate }) {
         priority: editData.priority,
         subject: editData.subject,
         department: editData.department,
-        document_number: editData.documentNo,
-        completed_by_name: completedByName.trim() 
+        document_number: editData.documentNo
       };
       
-      const url = `${API_URL}/documents/${document.id}`;
-      console.log('📤 PATCH to', url, 'with:', payload);
-      
-      const response = await fetch(url, {
+      const response = await fetch(`${API_URL}/documents/${document.id}`, {
         method: 'PATCH',
-        headers: headers,
+        headers,
         body: JSON.stringify(payload)
       });
 
       if (response.status === 401) {
-        console.error('❌ Unauthorized (401)');
         handleUnauthorized();
         return;
       }
 
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
+      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
 
-      const result = await response.json();
-      console.log('✅ Document updated:', result);
-      
+      console.log('✅ Document updated');
       setCurrentStatus(normalizeStatus(editData.status));
-      setEditData({ ...editData, status: normalizeStatus(editData.status) });
-      
       await onUpdate(document.id, payload);
       setIsEditing(false);
       alert('✅ บันทึกข้อมูลสำเร็จ');
@@ -242,95 +342,66 @@ function DocumentDetail({ document, onClose, onUpdate }) {
       department: normalizedDoc.department || '',
       documentNo: normalizedDoc.documentNo || ''
     });
-    setCompletedByName(normalizedDoc.completed_by_name || '');
     setIsEditing(false);
   };
   
   const getStatusColor = (status) => {
     const normalized = normalizeStatus(status);
-    
     switch(normalized) {
-      case 'รับเข้า':
-        return 'bg-gradient-to-r from-blue-500 to-cyan-500 text-white';
-      case 'รออนุมัติ':
-        return 'bg-gradient-to-r from-orange-400 to-amber-400 text-white';
-      case 'ส่งออก':
-        return 'bg-gradient-to-r from-green-500 to-emerald-500 text-white';
-      case 'เสร็จสิ้น':
-        return 'bg-gradient-to-r from-purple-500 to-violet-500 text-white';
-      default: 
-        return 'bg-gray-200 text-gray-800';
+      case 'รับเข้า': return 'bg-gradient-to-r from-blue-500 to-cyan-500 text-white';
+      case 'รออนุมัติ': return 'bg-gradient-to-r from-orange-400 to-amber-400 text-white';
+      case 'ส่งออก': return 'bg-gradient-to-r from-green-500 to-emerald-500 text-white';
+      case 'เสร็จสิ้น': return 'bg-gradient-to-r from-purple-500 to-violet-500 text-white';
+      default: return 'bg-gray-200 text-gray-800';
     }
   };
 
   const getPriorityColor = (priority) => {
     switch(priority) {
-      case 'ด่วนที่สุด': 
-      case 'urgent':
-        return 'text-red-500';
-      case 'ด่วนมาก': 
-      case 'high':
-        return 'text-orange-500';
-      case 'ด่วน': 
-      case 'medium':
-        return 'text-yellow-600';
-      case 'ปกติ': 
-      case 'normal':
-        return 'text-green-500';
-      default: 
-        return 'text-gray-500';
+      case 'ด่วนที่สุด': case 'urgent': return 'text-red-500';
+      case 'ด่วนมาก': case 'high': return 'text-orange-500';
+      case 'ด่วน': case 'medium': return 'text-yellow-600';
+      case 'ปกติ': case 'normal': return 'text-green-500';
+      default: return 'text-gray-500';
     }
   };
 
   const getButtonText = () => {
-    if (isStatusActive('รับเข้า')) {
-      return '→ ส่งอนุมัติ';
-    } else if (isStatusActive('รออนุมัติ')) {
-      return '→ ส่งออก';
-    } else if (isStatusActive('ส่งออก')) {
-      return '→ ทำเสร็จสิ้น';
-    } else {
-      return 'อัพเดทสถานะ';
-    }
+    if (isStatusActive('รับเข้า')) return '→ ส่งอนุมัติ';
+    if (isStatusActive('รออนุมัติ')) return '→ ส่งออก';
+    if (isStatusActive('ส่งออก')) return '→ ทำเสร็จสิ้น';
+    return 'อัพเดทสถานะ';
   };
 
   const getTimelineSteps = () => {
     return [
       { 
-        step: 1,
-        status: 'รับเข้า', 
+        step: 1, status: 'รับเข้า', 
         time: normalizedDoc.created_at ? new Date(normalizedDoc.created_at).toLocaleString('th-TH') : '',
-        color: 'green', 
-        active: true 
+        color: 'green', active: true,
+        completed_by_name: ''
       },
       { 
-        step: 2,
-        status: 'รออนุมัติ', 
-        time: isStatusActive('รออนุมัติ') 
-          ? new Date().toLocaleString('th-TH') 
-          : '',
+        step: 2, status: 'รออนุมัติ', 
+        time: isStatusActive('รออนุมัติ') ? new Date().toLocaleString('th-TH') : '',
         color: 'blue', 
-        active: isStatusActive('รออนุมัติ') || isStatusActive('ส่งออก') || isStatusActive('เสร็จสิ้น')
+        active: isStatusActive('รออนุมัติ') || isStatusActive('ส่งออก') || isStatusActive('เสร็จสิ้น'),
+        completed_by_name: ''
       },
       { 
-        step: 3,
-        status: 'ส่งออก', 
-        time: isStatusActive('ส่งออก') 
-          ? new Date().toLocaleString('th-TH') 
-          : '',
+        step: 3, status: 'ส่งออก', 
+        time: isStatusActive('ส่งออก') ? new Date().toLocaleString('th-TH') : '',
         color: 'orange', 
-        active: isStatusActive('ส่งออก') || isStatusActive('เสร็จสิ้น')
+        active: isStatusActive('ส่งออก') || isStatusActive('เสร็จสิ้น'),
+        completed_by_name: ''
       },
       { 
-        step: 4,
-        status: 'เสร็จสิ้น', 
-        time: isStatusActive('เสร็จสิ้น') 
-          ? new Date().toLocaleString('th-TH') 
-          : '',
+        step: 4, status: 'เสร็จสิ้น', 
+        time: isStatusActive('เสร็จสิ้น') ? new Date().toLocaleString('th-TH') : '',
         color: 'purple', 
         active: isStatusActive('เสร็จสิ้น'),
-        completed_by_name: completedByName || normalizedDoc.completed_by_name || '',
-        showName: Boolean(completedByName || normalizedDoc.completed_by_name)
+        completed_by_name: isStatusActive('เสร็จสิ้น') ? completedByName : '',
+        showName: isStatusActive('เสร็จสิ้น') && completedByName.trim().length > 0
       }
     ];
   };
@@ -338,7 +409,6 @@ function DocumentDetail({ document, onClose, onUpdate }) {
   return (
     <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-3xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden">
-        {/* Header */}
         <div className="sticky top-0 bg-gradient-to-r from-blue-50 to-indigo-50 p-6 border-b border-gray-100">
           <div className="flex items-start justify-between">
             <div className="flex-1 pr-4">
@@ -390,23 +460,17 @@ function DocumentDetail({ document, onClose, onUpdate }) {
                 )}
               </div>
             </div>
-            <button 
-              onClick={onClose}
-              className="p-2 hover:bg-white rounded-xl transition-all"
-            >
+            <button onClick={onClose} className="p-2 hover:bg-white rounded-xl transition-all">
               <X className="w-6 h-6" />
             </button>
           </div>
         </div>
         
-        {/* Content */}
         <div className="p-6 space-y-6 overflow-y-auto max-h-[calc(90vh-250px)]">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* From */}
             <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl p-5 border-2 border-blue-100">
               <p className="text-sm text-gray-600 mb-2 flex items-center gap-2">
-                <User className="w-4 h-4" />
-                จาก / ส่วนราชการ
+                <User className="w-4 h-4" /> จาก / ส่วนราชการ
               </p>
               {isEditing ? (
                 <input
@@ -421,11 +485,9 @@ function DocumentDetail({ document, onClose, onUpdate }) {
               )}
             </div>
 
-            {/* Document No */}
             <div className="bg-gradient-to-br from-orange-50 to-amber-50 rounded-2xl p-5 border-2 border-orange-100">
               <p className="text-sm text-gray-600 mb-2 flex items-center gap-2">
-                <FileText className="w-4 h-4" />
-                เลขที่เอกสาร
+                <FileText className="w-4 h-4" /> เลขที่เอกสาร
               </p>
               {isEditing ? (
                 <input
@@ -440,11 +502,9 @@ function DocumentDetail({ document, onClose, onUpdate }) {
               )}
             </div>
 
-            {/* Date */}
             <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-2xl p-5 border-2 border-purple-100">
               <p className="text-sm text-gray-600 mb-2 flex items-center gap-2">
-                <Calendar className="w-4 h-4" />
-                วันที่
+                <Calendar className="w-4 h-4" /> วันที่
               </p>
               {isEditing ? (
                 <input
@@ -459,11 +519,9 @@ function DocumentDetail({ document, onClose, onUpdate }) {
               )}
             </div>
 
-            {/* To */}
             <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-2xl p-5 border-2 border-green-100">
               <p className="text-sm text-gray-600 mb-2 flex items-center gap-2">
-                <User className="w-4 h-4" />
-                ถึง
+                <User className="w-4 h-4" /> ถึง
               </p>
               {isEditing ? (
                 <input
@@ -479,11 +537,9 @@ function DocumentDetail({ document, onClose, onUpdate }) {
             </div>
           </div>
 
-          {/* Subject */}
           <div className="bg-gradient-to-br from-cyan-50 to-blue-50 rounded-2xl p-5 border-2 border-cyan-100">
             <p className="text-sm text-gray-600 mb-2 flex items-center gap-2">
-              <FileText className="w-4 h-4" />
-              เรื่อง
+              <FileText className="w-4 h-4" /> เรื่อง
             </p>
             {isEditing ? (
               <textarea
@@ -498,19 +554,18 @@ function DocumentDetail({ document, onClose, onUpdate }) {
             )}
           </div>
 
-          {/* Input ชื่อผู้ดำเนินการ */}
           {isStatusActive('ส่งออก') && (
             <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-2xl p-5 border-2 border-purple-100">
               <p className="text-sm text-gray-600 mb-2 flex items-center gap-2">
-                <User className="w-4 h-4" />
-                ชื่อผู้ดำเนินการให้เสร็จสิ้น <span className="text-red-500">*</span>
+                <User className="w-4 h-4" /> ชื่อผู้ดำเนินการให้เสร็จสิ้น <span className="text-red-500">*</span>
               </p>
               <input
                 type="text"
                 value={completedByName}
                 onChange={(e) => setCompletedByName(e.target.value)}
                 className="font-bold text-gray-900 text-lg w-full px-3 py-2 border-2 border-purple-300 rounded-lg focus:border-purple-500"
-                placeholder="กรอกชื่อผู้ดำเนินการ (จำเป็น)"
+                placeholder="กรอกชื่อผู้ดำเนินการ"
+                required
               />
               {!completedByName.trim() && (
                 <p className="text-xs text-red-500 mt-1">⚠️ กรุณากรอกชื่อก่อนกดปุ่มทำเสร็จสิ้น</p>
@@ -518,12 +573,10 @@ function DocumentDetail({ document, onClose, onUpdate }) {
             </div>
           )}
 
-          {/* Timeline */}
           {!isEditing && (
             <div className="bg-white border-2 border-gray-200 rounded-2xl p-6">
               <h3 className="font-bold text-gray-900 mb-5 flex items-center gap-2 text-lg">
-                <TrendingUp className="w-5 h-5 text-blue-600" />
-                Timeline การดำเนินการ
+                <TrendingUp className="w-5 h-5 text-blue-600" /> Timeline การดำเนินการ
               </h3>
               <div className="space-y-4">
                 {getTimelineSteps().map((step, i) => (
@@ -540,14 +593,14 @@ function DocumentDetail({ document, onClose, onUpdate }) {
                         : 'bg-gray-300'
                     }`}></div>
                     <div className="flex-1 pb-4 border-l-2 border-dashed border-gray-200 last:border-0 pl-6 -ml-1.5">
-                      <div className="flex items-center gap-2">
-                        <p className={`font-semibold ${step.active ? 'text-gray-900' : 'text-gray-400'}`}>
-                          {step.status}
-                        </p>
-                      </div>
+                      <p className={`font-semibold ${step.active ? 'text-gray-900' : 'text-gray-400'}`}>
+                        {step.status}
+                      </p>
                       {step.time && <p className="text-sm text-gray-500 mt-1">📅 {step.time}</p>}
                       {step.showName && step.completed_by_name && (
-                        <p className="text-sm text-blue-600 font-semibold mt-1">👤 ผู้ดำเนินการ: {step.completed_by_name}</p>
+                        <p className="text-sm text-blue-600 font-semibold mt-1">
+                          👤 ผู้รับเอกสาร: {step.completed_by_name}
+                        </p>
                       )}
                     </div>
                   </div>
@@ -557,7 +610,6 @@ function DocumentDetail({ document, onClose, onUpdate }) {
           )}
         </div>
 
-        {/* Footer Buttons */}
         <div className="flex gap-4 p-6 border-t border-gray-100 bg-gradient-to-r from-gray-50 to-blue-50">
           {isEditing ? (
             <>
@@ -570,30 +622,25 @@ function DocumentDetail({ document, onClose, onUpdate }) {
               <button 
                 onClick={handleSave}
                 disabled={isLoading}
-                className="flex-1 px-6 py-3 bg-gradient-to-r from-green-600 to-emerald-600 text-white rounded-xl hover:shadow-xl transition-all font-medium flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="flex-1 px-6 py-3 bg-gradient-to-r from-green-600 to-emerald-600 text-white rounded-xl hover:shadow-xl transition-all font-medium flex items-center justify-center gap-2 disabled:opacity-50"
               >
-                <Save className="w-4 h-4" /> 
-                {isLoading ? 'กำลังบันทึก...' : 'บันทึกการแก้ไข'}
+                <Save className="w-4 h-4" /> {isLoading ? 'กำลังบันทึก...' : 'บันทึก'}
               </button>
             </>
           ) : (
             <>
               <button 
-                onClick={() => {
-                  console.log('✏️ เปิดโหมดแก้ไข');
-                  setIsEditing(true);
-                }}
+                onClick={() => setIsEditing(true)}
                 className="flex-1 px-6 py-3 border-2 border-blue-300 text-blue-600 rounded-xl hover:bg-blue-50 transition-all font-medium flex items-center justify-center gap-2"
               >
-                <Edit className="w-4 h-4" />
-                แก้ไข
+                <Edit className="w-4 h-4" /> แก้ไข
               </button>
               <button 
                 onClick={handleUpdateWorkflow}
                 disabled={isLoading || isStatusActive('เสร็จสิ้น') || (isStatusActive('ส่งออก') && !completedByName.trim())}
-                className="flex-1 px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl hover:shadow-xl hover:shadow-blue-500/30 transition-all font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                className="flex-1 px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl hover:shadow-xl transition-all font-medium disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {isLoading ? 'กำลังอัพเดท...' : isStatusActive('เสร็จสิ้น') ? '✓ เสร็จสิ้นแล้ว' : (isStatusActive('ส่งออก') && !completedByName.trim()) ? 'กรุณากรอกชื่อผู้ดำเนินการ' : getButtonText()}
+                {isLoading ? 'กำลังอัพเดท...' : isStatusActive('เสร็จสิ้น') ? '✓ เสร็จสิ้นแล้ว' : (isStatusActive('ส่งออก') && !completedByName.trim()) ? 'กรุณากรอกชื่อ' : getButtonText()}
               </button>
             </>
           )}

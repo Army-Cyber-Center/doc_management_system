@@ -169,36 +169,30 @@ function DocumentList({
    * ✅ Calculate document statistics (4 unified steps)
    */
   const calculateStats = (documentsList) => {
-    const newStats = {
-      received: 0,        // Step 1: รับเข้า
-      approval: 0,        // Step 2: รออนุมัติ
-      sent_out: 0,        // Step 3: ส่งออก
-      completed: 0        // Step 4: เสร็จสิ้น
-    };
-
-    // 1️⃣ นับเฉพาะสถานะจริงจากเอกสาร
-    documentsList.forEach(doc => {
-      const normalizedStatus = normalizeStatus(doc.status);
-
-      if (normalizedStatus === 'รับเข้า') {
-        newStats.received++;
-      } 
-      else if (normalizedStatus === 'รออนุมัติ') {
-        newStats.approval++;
-      } 
-      else if (normalizedStatus === 'ส่งออก') {
-        newStats.sent_out++;
-      } 
-      else if (normalizedStatus === 'เสร็จสิ้น') {
-        newStats.completed++;
-      }
-    });
-
-    console.log('📊 Statistics:', newStats);
-
-    // 2️⃣ อัปเดต state
-    setStats(newStats);
+  const newStats = {
+    received: documentsList.length, // ✅ คงที่ = จำนวนเอกสารทั้งหมด
+    approval: 0,
+    sent_out: 0,
+    completed: 0
   };
+
+  documentsList.forEach(doc => {
+    const normalizedStatus = normalizeStatus(doc.status);
+
+    if (normalizedStatus === 'รออนุมัติ') {
+      newStats.approval++;
+    } 
+    else if (normalizedStatus === 'ส่งออก') {
+      newStats.sent_out++;
+    } 
+    else if (normalizedStatus === 'เสร็จสิ้น') {
+      newStats.completed++;
+    }
+  });
+
+  console.log('📊 Statistics (Fixed Received):', newStats);
+  setStats(newStats);
+};
 
 
   /**
@@ -378,7 +372,7 @@ function DocumentList({
               เอกสารรับเข้า
             </button>
 
-            <button
+            {/* <button
               onClick={() => setActiveTab('outgoing')}
               className={`px-6 py-3 rounded-xl font-medium transition-all ${
                 activeTab === 'outgoing'
@@ -387,8 +381,8 @@ function DocumentList({
               }`}
             >
               <Send className="w-4 h-4 inline mr-2" />
-              เอกสารส่งออก
-            </button>
+              เอกสารส่งออก */}
+            {/* </button> */}
           </div>
 
           <div className="flex gap-3">
