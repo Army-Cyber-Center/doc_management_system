@@ -12,11 +12,11 @@ function Header() {
     }
   }, []);
 
-  const notifications = [
-    { id: 1, text: 'เอกสารใหม่: หนังสือขออนุมัติงบประมาณ', time: '5 นาทีที่แล้ว', unread: true },
-    { id: 2, text: 'เอกสารครบกำหนด: บันทึกข้อความการประชุม', time: '1 ชั่วโมงที่แล้ว', unread: true },
-    { id: 3, text: 'เอกสารส่งสำเร็จ: หนังสือตอบกลับ', time: '2 ชั่วโมงที่แล้ว', unread: false },
-  ];
+  // const notifications = [
+  //   { id: 1, text: 'เอกสารใหม่: หนังสือขออนุมัติงบประมาณ', time: '5 นาทีที่แล้ว', unread: true },
+  //   { id: 2, text: 'เอกสารครบกำหนด: บันทึกข้อความการประชุม', time: '1 ชั่วโมงที่แล้ว', unread: true },
+  //   { id: 3, text: 'เอกสารส่งสำเร็จ: หนังสือตอบกลับ', time: '2 ชั่วโมงที่แล้ว', unread: false },
+  // ];
 
   // สร้างตัวอักษรย่อ (เช่น สมชาย -> ส)
   const firstChar = user?.full_name
@@ -47,22 +47,22 @@ function Header() {
 
           {/* Right */}
           <div className="flex items-center gap-3">
-            <div className="relative hidden md:block">
+            {/* <div className="relative hidden md:block">
               <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
               <input
                 type="text"
                 placeholder="ค้นหาเอกสาร..."
                 className="pl-10 pr-4 py-2.5 w-64 bg-white/50 backdrop-blur border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/50"
               />
-            </div>
+            </div> */}
 
-            <button
+            {/* <button
               onClick={() => setShowNotifications(!showNotifications)}
               className="relative p-3 hover:bg-white/50 rounded-xl"
             >
               <Bell className="w-5 h-5 text-gray-600" />
               <span className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full"></span>
-            </button>
+            </button> */}
 
             {/* User Info */}
             <div className="flex items-center gap-3 pl-4 border-l border-gray-200">
@@ -86,7 +86,7 @@ function Header() {
         </div>
 
         {/* Notifications */}
-        {showNotifications && (
+        {/* {showNotifications && (
           <div className="absolute right-6 top-20 w-96 bg-white rounded-2xl shadow-2xl z-20">
             <div className="p-5 border-b">
               <h3 className="font-bold">การแจ้งเตือน</h3>
@@ -96,8 +96,8 @@ function Header() {
                 {n.text}
               </div>
             ))}
-          </div>
-        )}
+          </div> */}
+        {/* )} */}
       </div>
     </header>
   );
