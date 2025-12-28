@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { X, User, Calendar, FileText, Edit, TrendingUp, Save } from 'lucide-react';
 
 function DocumentDetail({ document, onClose, onUpdate }) {
-  const API_URL = 'http://192.168.2.10:8000/api/v1';
+  const API_URL = process.env.REACT_APP_API_URL;
   
   console.log('🔍 DocumentDetail received:', document);
   
