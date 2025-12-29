@@ -64,9 +64,9 @@ export const AuthProvider = ({ children }) => {
       user, 
       login, 
       logout, 
-      updateUser,&& loading === false 
+      updateUser,
       loading,
-      isAuthenticated: !!token 
+      isAuthenticated: !!token && loading === false 
     }}>
       {children}
     </AuthContext.Provider>
