@@ -38,7 +38,6 @@ code {
   background: linear-gradient(180deg, #2563eb, #4f46e5);
 }
 
-
 @keyframes blob {
   0%, 100% { transform: translate(0, 0) scale(1); }
   33% { transform: translate(30px, -50px) scale(1.1); }
@@ -53,7 +52,6 @@ code {
 .animation-delay-4000 {
   animation-delay: 4s;
 }
-
 
 /* Shimmer Animation */
 @keyframes shimmer {
@@ -85,103 +83,46 @@ code {
   animation: fade-in 0.3s ease-out;
 }
 
-/* ✅ DatePicker Custom Styles - Compact Version */
-.react-datepicker {
-  font-family: inherit !important;
-  border: 2px solid #e5e7eb !important;
+/* ✅ Ant Design RangePicker Custom Styles */
+.ant-picker-dropdown {
+  z-index: 9999 !important;
+}
+
+.ant-picker-panel-container {
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15) !important;
   border-radius: 12px !important;
-  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1) !important;
-  font-size: 0.875rem !important; /* ✅ ลดขนาดตัวอักษร */
 }
 
-.react-datepicker__header {
-  background-color: #3b82f6 !important;
-  border-bottom: none !important;
-  border-radius: 10px 10px 0 0 !important;
-  padding-top: 8px !important; /* ✅ ลด padding */
+.ant-picker-header {
+  padding: 12px !important;
 }
 
-.react-datepicker__current-month {
-  color: white !important;
-  font-weight: 600 !important;
-  font-size: 0.875rem !important; /* ✅ ลดขนาดตัวอักษร */
-  margin-bottom: 4px !important; /* ✅ ลดระยะห่าง */
+.ant-picker-cell-in-view.ant-picker-cell-selected .ant-picker-cell-inner {
+  background: #3b82f6 !important;
 }
 
-.react-datepicker__day-name,
-.react-datepicker__day {
-  width: 2rem !important; /* ✅ ลดขนาดช่อง (จาก default ~2.5rem) */
-  line-height: 2rem !important;
-  margin: 0.166rem !important; /* ✅ ลดระยะห่าง */
-  font-size: 0.75rem !important; /* ✅ ลดขนาดตัวอักษร */
+.ant-picker-cell-in-view.ant-picker-cell-range-start .ant-picker-cell-inner,
+.ant-picker-cell-in-view.ant-picker-cell-range-end .ant-picker-cell-inner {
+  background: #2563eb !important;
 }
 
-.react-datepicker__day-name {
-  color: white !important;
-  font-weight: 600 !important;
+.ant-picker-cell-in-view.ant-picker-cell-in-range .ant-picker-cell-inner {
+  background: #dbeafe !important;
 }
 
-.react-datepicker__day {
-  border-radius: 6px !important; /* ✅ ลดความโค้งมน */
-  transition: all 0.2s !important;
+/* ✅ Ant Design Input Focus */
+.ant-picker-focused {
+  border-color: #3b82f6 !important;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2) !important;
 }
 
-.react-datepicker__day:hover {
-  background-color: #dbeafe !important;
-  border-radius: 6px !important;
+/* ✅ Ant Design Button Hover */
+.ant-btn-primary {
+  background: #3b82f6 !important;
+  border-color: #3b82f6 !important;
 }
 
-.react-datepicker__day--selected,
-.react-datepicker__day--in-range,
-.react-datepicker__day--in-selecting-range {
-  background-color: #3b82f6 !important;
-  color: white !important;
-  border-radius: 6px !important;
-}
-
-.react-datepicker__day--keyboard-selected {
-  background-color: #60a5fa !important;
-  color: white !important;
-  border-radius: 6px !important;
-}
-
-.react-datepicker__day--range-start,
-.react-datepicker__day--range-end {
-  background-color: #1e40af !important;
-  color: white !important;
-  border-radius: 6px !important;
-}
-
-.react-datepicker__day--disabled {
-  color: #d1d5db !important;
-  cursor: not-allowed !important;
-}
-
-.react-datepicker__navigation {
-  top: 12px !important; /* ✅ ปรับตำแหน่งปุ่ม */
-  width: 24px !important; /* ✅ ลดขนาดปุ่ม */
-  height: 24px !important;
-}
-
-.react-datepicker__navigation-icon::before {
-  border-color: white !important;
-  border-width: 2px 2px 0 0 !important; /* ✅ ลดความหนาของลูกศร */
-  height: 7px !important; /* ✅ ลดขนาดลูกศร */
-  width: 7px !important;
-}
-
-/* ✅ ลดขนาด Month Container */
-.react-datepicker__month-container {
-  width: auto !important;
-}
-
-.react-datepicker__month {
-  margin: 0.4rem !important; /* ✅ ลด margin */
-  padding: 0.4rem !important; /* ✅ ลด padding */
-}
-
-/* ✅ ลดขนาด Week */
-.react-datepicker__week {
-  display: flex !important;
-  justify-content: space-around !important;
+.ant-btn-primary:hover {
+  background: #2563eb !important;
+  border-color: #2563eb !important;
 }
