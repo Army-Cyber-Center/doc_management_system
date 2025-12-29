@@ -126,9 +126,9 @@ function DocumentDetail({ document, onClose, onUpdate }) {
     try {
       const headers = getAuthHeaders();
       const getNextAction = () => {
-        if (isStatusActive('รับเข้า')) return { action: 'process', nextStatus: 'รออนุมัติ', stepNumber: 2 };
-        if (isStatusActive('รออนุมัติ')) return { action: 'send_out', nextStatus: 'ส่งออก', stepNumber: 3 };
-        if (isStatusActive('ส่งออก')) return { action: 'complete', nextStatus: 'เสร็จสิ้น', stepNumber: 4 };
+        if (isStatusActive('รับเข้า')) return { action: 'process', nextStatus: 'รออนุมัติ' };
+        if (isStatusActive('รออนุมัติ')) return { action: 'send_out', nextStatus: 'ส่งออก' };
+        if (isStatusActive('ส่งออก')) return { action: 'complete', nextStatus: 'เสร็จสิ้น' };
         return null;
       };
 
@@ -145,26 +145,36 @@ function DocumentDetail({ document, onClose, onUpdate }) {
         return;
       }
 
+      // ✅ ตรวจสอบ document.id
+      if (!document.id) {
+        console.error('❌ ไม่มี document.id');
+        alert('⚠️ ไม่พบ ID ของเอกสาร');
+        setIsLoading(false);
+        return;
+      }
+
       console.log('🔄 Starting update process...');
       console.log('📋 Document ID:', document.id);
       console.log('📋 Current Status:', currentStatus);
       console.log('📋 Next Status:', next.nextStatus);
       console.log('📋 Action:', next.action);
 
-      // ✅ 1. อัพเดท workflows table ก่อน (สร้าง record ใหม่)
+      // ✅ 1. สร้าง workflow payload (ตรงกับ API schema)
       const workflowPayload = {
         document_id: parseInt(document.id),
-        step_number: next.stepNumber+1,
         action: next.action,
-        user_id: 3, // ใส่ user_id ตามที่ login
         comment: `เปลี่ยนสถานะเป็น ${next.nextStatus}`,
-        completed_by_name: next.action === 'complete' ? completedByName.trim() : null,
-        status: next.nextStatus === 'เสร็จสิ้น' ? 'completed' : next.nextStatus
+        completed_by_name: next.action === 'complete' ? completedByName.trim() : null
       };
+
+      // ลบ field ที่เป็น null (ถ้า API ไม่ยอมรับ null)
+      if (workflowPayload.completed_by_name === null) {
+        delete workflowPayload.completed_by_name;
+      }
 
       console.log('📤 Workflow payload:', JSON.stringify(workflowPayload, null, 2));
 
-      // ลอง POST ก่อน (สร้าง record ใหม่)
+      // ✅ 2. ส่ง POST request ไป /workflows/
       const workflowResponse = await fetch(`${API_URL}/workflows/`, {
         method: 'POST',
         headers,
@@ -178,38 +188,34 @@ function DocumentDetail({ document, onClose, onUpdate }) {
         return;
       }
 
-      let workflowSuccess = false;
-      if (workflowResponse.ok) {
-        const workflowData = await workflowResponse.json();
-        console.log('✅ Workflow created:', workflowData);
-        workflowSuccess = true;
-      } else {
+      if (!workflowResponse.ok) {
         const errorText = await workflowResponse.text();
         console.error('❌ Workflow error:', errorText);
         
-        // ถ้า POST ไม่ได้ ลอง PUT
-        console.log('🔄 Trying PUT instead...');
-        const workflowPutResponse = await fetch(`${API_URL}/workflows/${document.id}`, {
-          method: 'PUT',
-          headers,
-          body: JSON.stringify(workflowPayload)
-        });
-
-        if (workflowPutResponse.ok) {
-          const workflowData = await workflowPutResponse.json();
-          console.log('✅ Workflow updated with PUT:', workflowData);
-          workflowSuccess = true;
-        } else {
-          const putErrorText = await workflowPutResponse.text();
-          console.error('❌ Workflow PUT also failed:', putErrorText);
+        try {
+          const errorJson = JSON.parse(errorText);
+          alert(`⚠️ ไม่สามารถอัพเดท workflow ได้\n\n${JSON.stringify(errorJson, null, 2)}`);
+        } catch (e) {
+          alert(`⚠️ ไม่สามารถอัพเดท workflow ได้\n\n${errorText}`);
         }
+        
+        setIsLoading(false);
+        return;
       }
 
-      // ✅ 2. อัพเดท documents table
+      const workflowData = await workflowResponse.json();
+      console.log('✅ Workflow created:', workflowData);
+
+      // ✅ 3. อัพเดท documents table
       const docPayload = {
         status: next.nextStatus,
         completed_by_name: next.action === 'complete' ? completedByName.trim() : null
       };
+
+      // ลบ field ที่เป็น null
+      if (docPayload.completed_by_name === null) {
+        delete docPayload.completed_by_name;
+      }
 
       console.log('📤 Document payload:', JSON.stringify(docPayload, null, 2));
 
@@ -226,20 +232,9 @@ function DocumentDetail({ document, onClose, onUpdate }) {
         return;
       }
 
-      if (docResponse.status === 422) {
+      if (!docResponse.ok) {
         const errorText = await docResponse.text();
-        console.error('❌ Document validation error:', errorText);
-        throw new Error('Validation error: ' + errorText);
-      }
-
-      let docSuccess = false;
-      if (docResponse.ok) {
-        const docData = await docResponse.json();
-        console.log('✅ Document updated:', docData);
-        docSuccess = true;
-      } else {
-        const errorText = await docResponse.text();
-        console.error('❌ Document error:', errorText);
+        console.error('❌ Document update error:', errorText);
         
         // ลอง PATCH แทน
         console.log('🔄 Trying PATCH instead...');
@@ -249,33 +244,32 @@ function DocumentDetail({ document, onClose, onUpdate }) {
           body: JSON.stringify(docPayload)
         });
 
-        if (docPatchResponse.ok) {
-          const docData = await docPatchResponse.json();
-          console.log('✅ Document updated with PATCH:', docData);
-          docSuccess = true;
-        } else {
+        if (!docPatchResponse.ok) {
           const patchErrorText = await docPatchResponse.text();
           console.error('❌ Document PATCH also failed:', patchErrorText);
-          throw new Error('Failed to update document: ' + patchErrorText);
+          throw new Error('Failed to update document status');
         }
-      }
 
-      if (docSuccess || workflowSuccess) {
-        setCurrentStatus(next.nextStatus);
-        await onUpdate(document.id, { 
-          status: next.nextStatus, 
-          completed_by_name: next.action === 'complete' ? completedByName.trim() : null 
-        });
-
-        // alert('✅ อัพเดทสถานะสำเร็จ');
-        
-        setTimeout(() => {
-          onClose();
-          window.location.reload();
-        }, 1000);
+        const docData = await docPatchResponse.json();
+        console.log('✅ Document updated with PATCH:', docData);
       } else {
-        throw new Error('ไม่สามารถอัพเดทข้อมูลได้');
+        const docData = await docResponse.json();
+        console.log('✅ Document updated:', docData);
       }
+
+      // ✅ สำเร็จ
+      setCurrentStatus(next.nextStatus);
+      await onUpdate(document.id, { 
+        status: next.nextStatus, 
+        completed_by_name: next.action === 'complete' ? completedByName.trim() : null 
+      });
+
+      alert('✅ อัพเดทสถานะสำเร็จ');
+
+      setTimeout(() => {
+        onClose();
+        window.location.reload();
+      }, 1000);
 
     } catch (error) {
       console.error('❌ Status update failed:', error);
