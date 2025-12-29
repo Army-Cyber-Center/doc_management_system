@@ -320,7 +320,6 @@ function DocumentForm({ onClose, onSubmit }) {
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
-  // ✅ ฟังก์ชันสำหรับปุ่ม "เสร็จสิ้น" - แค่บันทึกข้อมูล
   const handleSubmit = async () => {
     if (!result?.id) {
       alert('⚠️ ไม่มีเอกสารให้บันทึก');
@@ -328,30 +327,30 @@ function DocumentForm({ onClose, onSubmit }) {
     }
 
     console.log('✅ กดปุ่มเสร็จสิ้น - กำลังบันทึกข้อมูล...');
+    console.log('📦 result.id:', result.id);
     console.log('📦 formData:', formData);
     console.log('📦 documentDetails:', documentDetails);
-    console.log('📦 result:', result);
 
     try {
       if (onSubmit) {
-        // ✅ จัดรูปแบบข้อมูลให้ถูกต้อง
+        // ✅ ส่งเฉพาะข้อมูล metadata
         const submitData = {
-          id: result.id, // ✅ ส่ง id ของเอกสารที่อัพโหลดแล้ว
-          type: formData.type,
+          id: result.id, // document ID ที่อัพโหลดแล้ว
+          document_type: formData.type,
           title: formData.title || 'ไม่มีชื่อเอกสาร',
-          from: formData.from || documentDetails?.from || '',
-          to: formData.to || '',
-          priority: formData.priority || 'ปกติ',
-          department: formData.department || documentDetails?.department || '',
-          documentNo: formData.documentNo || documentDetails?.documentNo || '',
-          date: formData.date || documentDetails?.date || '',
+          from_department: formData.from || documentDetails?.from || '',
+          to_user_id: formData.to || null,
+          priority: formData.priority === 'ปกติ' ? 'normal' : 
+                    formData.priority === 'ด่วน' ? 'urgent' :
+                    formData.priority === 'ด่วนมาก' ? 'very_urgent' :
+                    formData.priority === 'ด่วนที่สุด' ? 'highest' : 'normal',
+          document_number: formData.documentNo || documentDetails?.documentNo || null,
           subject: formData.subject || documentDetails?.subject || '',
-          file: formData.file,
-          ocr_id: result.id,
-          full_raw_text: documentDetails?.full_raw_text || ''
+          department: formData.department || documentDetails?.department || '',
+          date: formData.date || documentDetails?.date || ''
         };
 
-        console.log('📤 ข้อมูลที่จะส่ง:', submitData);
+        console.log('📤 ข้อมูลที่จะส่งไป API:', submitData);
 
         await onSubmit(submitData);
         
@@ -359,19 +358,35 @@ function DocumentForm({ onClose, onSubmit }) {
       }
     } catch (err) {
       console.error('❌ เกิดข้อผิดพลาดในการบันทึก:', err);
-      console.error('❌ Error details:', {
-        message: err.message,
-        stack: err.stack,
-        response: err.response
-      });
+      
+      // ✅ แปลง error ให้อ่านได้
+      let errorMessage = 'ไม่ทราบสาเหตุ';
+      
+      if (err.response?.data) {
+        // กรณี error จาก API
+        const errorData = err.response.data;
+        console.log('📛 Error from API:', errorData);
+        
+        if (Array.isArray(errorData)) {
+          // ถ้าเป็น Array → แปลงเป็น string
+          errorMessage = errorData.map((e, i) => `${i + 1}. ${JSON.stringify(e)}`).join('\n');
+        } else if (typeof errorData === 'object') {
+          // ถ้าเป็น Object → แปลงเป็น JSON string
+          errorMessage = JSON.stringify(errorData, null, 2);
+        } else {
+          errorMessage = String(errorData);
+        }
+      } else if (err.message) {
+        errorMessage = err.message;
+      }
       
       alert(
         '⚠️ ไม่สามารถบันทึกเอกสารได้\n\n' +
         'กรุณาตรวจสอบ:\n' +
         '1. ข้อมูลในฟอร์มครบถ้วนหรือไม่\n' +
         '2. เชื่อมต่ออินเทอร์เน็ตหรือไม่\n' +
-        '3. ติดต่อผู้ดูแลระบบหากปัญหายังคงอยู่\n\n' +
-        `Error: ${err.message}`
+        '3. สิ่งต่อดีบัก:\n\n' +
+        errorMessage
       );
     }
   };
