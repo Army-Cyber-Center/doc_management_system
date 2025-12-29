@@ -9,7 +9,7 @@ import './App.css';
 import { useAuth } from './context/AuthContext';
 
 function App() {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, loading: authLoading } = useAuth();
   
   const [activeTab, setActiveTab] = useState('incoming');
   const [showNewDocForm, setShowNewDocForm] = useState(false);
@@ -21,8 +21,21 @@ function App() {
 
   const { fetchStats } = useStats();
 
+  // ✅ Show login page while checking authentication
   if (!isAuthenticated) {
     return <LoginSystem />;
+  }
+
+  // ✅ Show loading while checking auth status
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-12 h-12 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-gray-600">กำลังโหลด...</p>
+        </div>
+      </div>
+    );
   }
 
   return (

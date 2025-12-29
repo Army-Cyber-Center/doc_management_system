@@ -8,16 +8,27 @@ export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // ✅ โหลด user จาก localStorage
+  // ✅ โหลด user จาก localStorage เมื่อ app เริ่มต้น
   useEffect(() => {
+    const storedToken = localStorage.getItem('access_token');
     const storedUser = localStorage.getItem('user');
-    if (storedUser) {
+    
+    if (storedToken && storedUser) {
       try {
+        setToken(storedToken);
         setUser(JSON.parse(storedUser));
       } catch (error) {
         console.error('Failed to parse user data:', error);
         localStorage.removeItem('user');
+        localStorage.removeItem('access_token');
+        setToken(null);
+        setUser(null);
       }
+    } else if (!storedToken) {
+      // ถ้าไม่มี token ให้ลบข้อมูล user ด้วย
+      localStorage.removeItem('user');
+      setToken(null);
+      setUser(null);
     }
     setLoading(false);
   }, []);
@@ -37,6 +48,8 @@ export const AuthProvider = ({ children }) => {
     localStorage.removeItem('user');
     setToken(null);
     setUser(null);
+    // ✅ Redirect to login page after logout
+    window.location.href = '/';
   };
 
   // ✅ เพิ่ม updateUser function
@@ -51,7 +64,7 @@ export const AuthProvider = ({ children }) => {
       user, 
       login, 
       logout, 
-      updateUser,
+      updateUser,&& loading === false 
       loading,
       isAuthenticated: !!token 
     }}>

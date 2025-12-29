@@ -26,11 +26,17 @@ apiClient.interceptors.request.use(
 apiClient.interceptors.response.use(
   (response) => response,
   (error) => {
-    // Handle 401 Unauthorized
+    // Handle 401 Unauthorized - Token expired or invalid
     if (error.response?.status === 401) {
+      console.warn('⚠️ Token invalid or expired, redirecting to login...');
       localStorage.removeItem('access_token');
       localStorage.removeItem('user');
-      window.location.href = '/'; // Redirect to login
+      // ✅ Redirect to login page
+      window.location.href = '/';
+    }
+    // Handle 403 Forbidden
+    else if (error.response?.status === 403) {
+      console.warn('⚠️ Access forbidden');
     }
     return Promise.reject(error);
   }

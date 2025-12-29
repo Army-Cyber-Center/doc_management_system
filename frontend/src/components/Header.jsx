@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { Bell, FileText, Search } from 'lucide-react';
+import { Bell, FileText, Search, LogOut } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
 
 function Header() {
   const [showNotifications, setShowNotifications] = useState(false);
   const [user, setUser] = useState(null);
+  const { logout } = useAuth();
 
   useEffect(() => {
     const storedUser = localStorage.getItem('user');
@@ -81,6 +83,15 @@ function Header() {
                   {user?.role || 'ผู้ใช้งานระบบ'}
                 </p>
               </div>
+              
+              {/* ✅ Logout Button */}
+              <button
+                onClick={logout}
+                className="ml-3 p-2.5 text-gray-600 hover:bg-red-50 hover:text-red-600 rounded-xl transition-colors"
+                title="ออกจากระบบ"
+              >
+                <LogOut className="w-5 h-5" />
+              </button>
             </div>
           </div>
         </div>
