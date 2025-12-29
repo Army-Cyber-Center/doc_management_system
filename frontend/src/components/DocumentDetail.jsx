@@ -146,14 +146,14 @@ function DocumentDetail({ document, onClose, onUpdate }) {
       }
 
       console.log('🔄 Starting update process...');
-      console.log('📋 Document ID:', document.document_id);
+      console.log('📋 Document ID:', document.id);
       console.log('📋 Current Status:', currentStatus);
       console.log('📋 Next Status:', next.nextStatus);
       console.log('📋 Action:', next.action);
 
       // ✅ 1. อัพเดท workflows table ก่อน (สร้าง record ใหม่)
       const workflowPayload = {
-        document_id: parseInt(document.document_id),
+        document_id: parseInt(document.id),
         step_number: next.stepNumber+1,
         action: next.action,
         user_id: 3, // ใส่ user_id ตามที่ login
