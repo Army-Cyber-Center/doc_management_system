@@ -69,67 +69,6 @@ const parseOCRText = (extractedText, parsedFields = {}) => {
   return result;
 };
 
-// ✅ waitForDocument function - รองรับ API จริง
-const waitForDocument = async (
-  getDocument,
-  id,
-  {
-    interval = 3000,
-    timeout = 240000
-  } = {},
-  onProgress,
-  onMessage
-) => {
-  const start = Date.now();
-  let attempts = 0;
-  const maxAttempts = Math.floor(timeout / interval);
-
-  while (Date.now() - start < timeout) {
-    attempts++;
-    const elapsed = Math.floor((Date.now() - start) / 1000);
-
-    if (onProgress) {
-      const progressPercent = Math.min((attempts / maxAttempts) * 90, 90);
-      onProgress(progressPercent);
-    }
-
-    if (onMessage) {
-      if (elapsed < 30) {
-        onMessage('🔍 กำลังวิเคราะห์เอกสาร...');
-      } else if (elapsed < 60) {
-        onMessage('📝 กำลังแยกข้อความจากเอกสาร...');
-      } else if (elapsed < 90) {
-        onMessage('🔄 กำลังประมวลผลข้อมูล...');
-      } else if (elapsed < 120) {
-        onMessage('⏳ เกือบเสร็จแล้ว กรุณารอสักครู่...');
-      } else {
-        onMessage('⌛ กำลังประมวลผลขั้นสุดท้าย...');
-      }
-    }
-
-    try {
-      console.log(`⏳ [${elapsed}s] กำลังรอ OCR... (ครั้งที่ ${attempts}/${maxAttempts})`);
-      const data = await getDocument(id);
-
-      // ✅ เช็คว่ามี ocr_data.text หรือไม่
-      const hasOCRData = data?.ocr_data?.text && data?.ocr_data?.text.length > 0;
-
-      if (hasOCRData) {
-        console.log('✅ OCR เสร็จแล้ว! Data:', data);
-        if (onProgress) onProgress(100);
-        if (onMessage) onMessage('✅ ประมวลผลสำเร็จ!');
-        return data;
-      }
-    } catch (err) {
-      console.warn(`⚠️ [${elapsed}s] ยังไม่พร้อม, รอต่อ...`, err.message);
-    }
-
-    await new Promise(resolve => setTimeout(resolve, interval));
-  }
-
-  throw new Error('⏱️ ระบบใช้เวลานานเกินไป (เกิน 4 นาที) กรุณาลองใหม่');
-};
-
 function DocumentForm({ onClose, onSubmit }) {
   const [formData, setFormData] = useState({
     type: 'incoming',
@@ -176,29 +115,15 @@ function DocumentForm({ onClose, onSubmit }) {
         return;
       }
 
-      console.log('🚀 เริ่มต้นการประมวลผล OCR... ID:', result.id);
+      console.log('🚀 เริ่มต้นการดึงข้อมูล OCR... ID:', result.id);
 
       setLoadingDetails(true);
-      setProgress(0);
-      setProgressMessage('🔍 กำลังเตรียมการ...');
+      setProgress(50);
+      setProgressMessage('🔍 กำลังดึงข้อมูล OCR...');
 
       try {
-        const data = await waitForDocument(
-          getDocument,
-          result.id,
-          {
-            interval: 3000,
-            timeout: 240000
-          },
-          (progressPercent) => {
-            setProgress(progressPercent);
-            console.log(`📊 ความคืบหน้า: ${progressPercent.toFixed(0)}%`);
-          },
-          (message) => {
-            setProgressMessage(message);
-            console.log(`💬 ${message}`);
-          }
-        );
+        // ✅ เรียก API ครั้งเดียว ไม่มี polling
+        const data = await getDocument(result.id);
 
         setProgress(100);
         setProgressMessage('✅ ประมวลผลสำเร็จ!');
@@ -236,12 +161,11 @@ function DocumentForm({ onClose, onSubmit }) {
         setLoadingDetails(false);
 
         alert(
-          '⚠️ ระบบใช้เวลานานเกินไป (เกิน 4 นาที)\n\n' +
+          '⚠️ ไม่สามารถดึงข้อมูล OCR ได้\n\n' +
           'กรุณา:\n' +
-          '1. ตรวจสอบขนาดไฟล์ (ควร < 5MB)\n' +
-          '2. ตรวจสอบคุณภาพภาพ (ชัดเจน ไม่เบลอ)\n' +
-          '3. ลองอัพโหลดใหม่อีกครั้ง\n' +
-          '4. ติดต่อผู้ดูแลระบบหากปัญหายังคงอยู่'
+          '1. ตรวจสอบการเชื่อมต่ออินเทอร์เน็ต\n' +
+          '2. ลองอัพโหลดใหม่อีกครั้ง\n' +
+          '3. ติดต่อผู้ดูแลระบบหากปัญหายังคงอยู่'
         );
       }
     };
@@ -513,24 +437,7 @@ function DocumentForm({ onClose, onSubmit }) {
                 className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
               />
             </div>
-          
-          {loadingDetails && (
-            <div className="border-2 border-dashed border-indigo-200 rounded-2xl p-6 bg-indigo-50">
-              <p className="font-bold text-indigo-700 mb-3 text-center">
-                ⏳ กรุณารอสักครู่ ระบบกำลังประมวลผลข้อมูลเอกสาร
-                ระบบกำลังประมวลผลเอกสาร
-                อาจใช้เวลาประมาณ 1–2 นาที
-                กรุณาอย่าปิดหน้านี้
-              </p>
 
-              <div className="w-full bg-indigo-100 rounded-full h-3 overflow-hidden">
-                <div
-                  className="h-3 bg-gradient-to-r from-indigo-500 to-blue-600 transition-all duration-300"
-                  style={{ width: `${progress}%` }}
-                />
-              </div>
-            </div>
-          )}
             {/* Flip */}
             <div>
               <label className="text-sm font-semibold text-gray-700 mb-3 block">พลิก</label>
@@ -897,7 +804,7 @@ function DocumentForm({ onClose, onSubmit }) {
 
               <div className="flex items-center justify-center gap-2 text-xs text-gray-500 mb-4">
                 <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
-                <span>ใช้เวลาประมาณ 1-2 นาที</span>
+                <span>ระบบกำลังดึงข้อมูล OCR</span>
               </div>
 
               {progress > 0 && progress < 100 && (
