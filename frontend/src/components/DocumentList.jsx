@@ -26,22 +26,23 @@ function DocumentList({
   const [ocrLoading, setOcrLoading] = useState(false);
   const [ocrError, setOcrError] = useState(null);
 
-  // ✅ Statistics state - 4 unified steps
+  // ✅ Statistics state
   const [stats, setStats] = useState({
-    received: 0,        // Step 1: รับเข้า
-    approval: 0,        // Step 2: รออนุมัติ
-    sent_out: 0,        // Step 3: ส่งออก
-    completed: 0        // Step 4: เสร็จสิ้น
+    received: 0,
+    approval: 0,
+    sent_out: 0,
+    completed: 0
   });
 
-  // 🔍 Search
+  // 🔍 Search & Filter
   const [searchQuery, setSearchQuery] = useState('');
+  const [dateFilter, setDateFilter] = useState('today'); // ✅ เพิ่ม date filter
+  const [showFilterMenu, setShowFilterMenu] = useState(false); // ✅ แสดง/ซ่อน filter menu
   
-  // ✅ Fetch all OCR documents on component mount or when activeTab changes
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+  // ✅ Fetch documents เมื่อ activeTab หรือ dateFilter เปลี่ยน
   useEffect(() => {
     fetchAllOCRDocuments();
-  }, [activeTab]);
+  }, [activeTab, dateFilter]); // ✅ เพิ่ม dateFilter เป็น dependency
 
   /**
    * Handle 401 - Redirect to login
@@ -72,7 +73,7 @@ function DocumentList({
   };
 
   /**
-   * Fetch all OCR documents
+   * ✅ Fetch all OCR documents with date filter
    */
   const fetchAllOCRDocuments = async () => {
     setOcrLoading(true);
@@ -86,57 +87,47 @@ function DocumentList({
         throw new Error('API_URL is not configured. Set REACT_APP_API_URL in .env');
       }
 
-      // ✅ Try different endpoints (ไม่ต้องเพิ่ม /api/v1 เพราะมีอยู่แล้ว)
-      const endpoints = [
-        `${API_URL}/documents?document_type=${activeTab}`,
-        `${API_URL}/documents`,
-        `${API_URL}/ocr/results`
-      ];
+      // ✅ สร้าง URL พร้อม query parameters
+      const params = new URLSearchParams({
+        document_type: activeTab,
+        date_filter: dateFilter, // ✅ เพิ่ม date_filter
+        page: 1,
+        per_page: 100
+      });
 
-      let data = null;
-      let lastError = null;
+      const apiUrl = `${API_URL}/documents?${params.toString()}`;
+      console.log(`🔍 Fetching: ${apiUrl}`);
 
-      for (const apiUrl of endpoints) {
-        try {
-          console.log(`🔍 Trying endpoint: ${apiUrl}`);
+      const response = await fetch(apiUrl, {
+        method: 'GET',
+        headers: headers
+      });
 
-          const response = await fetch(apiUrl, {
-            method: 'GET',
-            headers: headers
-          });
-
-          if (response.ok) {
-            const responseText = await response.text();
-            data = JSON.parse(responseText);
-            console.log(`✅ Success from: ${apiUrl}`);
-            break;
-          } else if (response.status === 401) {
-            lastError = '❌ Authentication failed (401). Token may be expired.';
-            console.error(lastError);
-            handleUnauthorized();
-          } else {
-            lastError = `${response.status} ${response.statusText}`;
-            console.warn(`❌ Failed: ${apiUrl} - ${lastError}`);
-          }
-        } catch (err) {
-          lastError = err.message;
-          continue;
-        }
+      if (response.status === 401) {
+        console.error('❌ Authentication failed (401)');
+        handleUnauthorized();
+        return;
       }
 
-      if (!data) {
-        throw new Error(`All endpoints failed. Last error: ${lastError}`);
+      if (!response.ok) {
+        throw new Error(`${response.status} ${response.statusText}`);
       }
+
+      const data = await response.json();
+      console.log('✅ Documents fetched:', data);
 
       // Handle different response formats
-      const documentsList = Array.isArray(data) ? data : data.data || data.documents || [];
+      const documentsList = Array.isArray(data) 
+        ? data 
+        : data.data || data.documents || [];
+
       setOcrDocuments(documentsList);
 
       // ✅ Calculate statistics
       calculateStats(documentsList);
 
     } catch (err) {
-      console.error('Error fetching OCR documents:', err.message);
+      console.error('❌ Error fetching documents:', err.message);
       setOcrError(err.message);
       setOcrDocuments([]);
     } finally {
@@ -152,7 +143,6 @@ function DocumentList({
     
     const normalized = status.toLowerCase().trim();
     
-    // Map all variants to unified status
     if (normalized === 'รับแล้ว' || normalized === 'received' || normalized === 'incoming' || normalized === 'processed') {
       return 'รับเข้า';
     }
@@ -166,15 +156,15 @@ function DocumentList({
       return 'เสร็จสิ้น';
     }
     
-    return 'รับเข้า'; // default
+    return 'รับเข้า';
   };
 
   /**
-   * ✅ Calculate document statistics (4 unified steps)
+   * ✅ Calculate document statistics
    */
   const calculateStats = (documentsList) => {
     const newStats = {
-      received: documentsList.length, // ✅ คงที่ = จำนวนเอกสารทั้งหมด
+      received: documentsList.length,
       approval: 0,
       sent_out: 0,
       completed: 0
@@ -194,7 +184,7 @@ function DocumentList({
       }
     });
 
-    console.log('📊 Statistics (Fixed Received):', newStats);
+    console.log('📊 Statistics:', newStats);
     setStats(newStats);
   };
 
@@ -207,58 +197,40 @@ function DocumentList({
       const API_URL = process.env.REACT_APP_API_URL;
 
       if (!API_URL) {
-        throw new Error('API_URL is not configured. Set REACT_APP_API_URL in .env');
+        throw new Error('API_URL is not configured');
       }
 
-      // ✅ Try different endpoints
-      const endpoints = [
-        `${API_URL}/documents/${documentId}`,
-        `${API_URL}/ocr/document/${documentId}`
-      ];
+      const apiUrl = `${API_URL}/documents/${documentId}`;
+      console.log(`🔍 Fetching document: ${apiUrl}`);
 
-      let data = null;
-      let lastError = null;
+      const response = await fetch(apiUrl, {
+        method: 'GET',
+        headers: headers
+      });
 
-      for (const apiUrl of endpoints) {
-        try {
-          console.log(`🔍 Fetching document: ${apiUrl}`);
-
-          const response = await fetch(apiUrl, {
-            method: 'GET',
-            headers: headers
-          });
-
-          if (response.ok) {
-            data = await response.json();
-            console.log(`✅ Document fetched from: ${apiUrl}`);
-            break;
-          } else if (response.status === 401) {
-            lastError = 'Token expired. Redirecting to login...';
-            console.error(lastError);
-            handleUnauthorized();
-          } else {
-            lastError = `${response.status} ${response.statusText}`;
-          }
-        } catch (err) {
-          lastError = err.message;
-          continue;
-        }
+      if (response.status === 401) {
+        handleUnauthorized();
+        return null;
       }
 
-      if (!data) {
-        throw new Error(`All endpoints failed. Last error: ${lastError}`);
+      if (!response.ok) {
+        throw new Error(`${response.status} ${response.statusText}`);
       }
 
+      const data = await response.json();
+      console.log('✅ Document fetched');
       return data;
 
     } catch (err) {
-      console.error('Error fetching OCR document:', err.message);
+      console.error('❌ Error fetching document:', err.message);
       throw err;
     }
   };
 
-  // ✅ Use OCR documents if available, otherwise use props documents
-  const displayDocuments = activeTab === 'incoming' ? ocrDocuments : (Array.isArray(documents) ? documents : []);
+  // ✅ Use OCR documents if available
+  const displayDocuments = activeTab === 'incoming' 
+    ? ocrDocuments 
+    : (Array.isArray(documents) ? documents : []);
   const isLoading = activeTab === 'incoming' ? ocrLoading : loading;
 
   // 🔍 Search filter
@@ -311,11 +283,10 @@ function DocumentList({
   };
 
   /**
-   * Handle document click - fetch full details if needed
+   * Handle document click
    */
   const handleDocumentClick = async (doc) => {
     try {
-      // If it's an OCR document, fetch full details
       if (doc.document_id) {
         const fullDoc = await fetchOCRDocument(doc.document_id);
         onDocumentClick?.(fullDoc);
@@ -324,7 +295,6 @@ function DocumentList({
       }
     } catch (err) {
       console.error('Error handling document click:', err);
-      // Still pass the document even if fetch fails
       onDocumentClick?.(doc);
     }
   };
@@ -340,9 +310,20 @@ function DocumentList({
     </div>
   );
 
+  // ✅ Date Filter Label
+  const getDateFilterLabel = () => {
+    switch (dateFilter) {
+      case 'today': return 'วันนี้';
+      case 'this_week': return 'สัปดาห์นี้';
+      case 'this_month': return 'เดือนนี้';
+      case 'all': return 'ทั้งหมด';
+      default: return 'วันนี้';
+    }
+  };
+
   return (
     <div className="space-y-6">
-      {/* ✅ Statistics Dashboard - 4 Unified Steps */}
+      {/* ✅ Statistics Dashboard */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <StatCard
           icon={Inbox}
@@ -356,7 +337,6 @@ function DocumentList({
           value={stats.approval}
           color="bg-gradient-to-br from-orange-500 to-orange-600"
         />
-
         <StatCard
           icon={Send}
           label="ส่งออก"
@@ -402,11 +382,47 @@ function DocumentList({
                 className="pl-10 pr-4 py-2.5 bg-white/50 backdrop-blur border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/50"
               />
             </div>
-{/* 
-            <button className="px-4 py-2.5 text-gray-700 bg-white/50 rounded-xl hover:bg-white transition-all flex items-center gap-2 border border-gray-200">
-              <Filter className="w-4 h-4" />
-              <span className="hidden md:inline">กรอง</span>
-            </button> */}
+
+            {/* ✅ Date Filter Dropdown */}
+            <div className="relative">
+              <button 
+                onClick={() => setShowFilterMenu(!showFilterMenu)}
+                className="px-4 py-2.5 text-gray-700 bg-white/50 rounded-xl hover:bg-white transition-all flex items-center gap-2 border border-gray-200"
+              >
+                <Filter className="w-4 h-4" />
+                <span className="hidden md:inline">{getDateFilterLabel()}</span>
+              </button>
+
+              {/* Dropdown Menu */}
+              {showFilterMenu && (
+                <div className="absolute right-0 mt-2 w-48 bg-white rounded-xl shadow-lg border border-gray-200 py-2 z-50">
+                  <button
+                    onClick={() => { setDateFilter('today'); setShowFilterMenu(false); }}
+                    className={`w-full px-4 py-2 text-left hover:bg-blue-50 transition-colors ${dateFilter === 'today' ? 'bg-blue-50 text-blue-600 font-medium' : 'text-gray-700'}`}
+                  >
+                    📅 วันนี้
+                  </button>
+                  <button
+                    onClick={() => { setDateFilter('this_week'); setShowFilterMenu(false); }}
+                    className={`w-full px-4 py-2 text-left hover:bg-blue-50 transition-colors ${dateFilter === 'this_week' ? 'bg-blue-50 text-blue-600 font-medium' : 'text-gray-700'}`}
+                  >
+                    📆 สัปดาห์นี้
+                  </button>
+                  <button
+                    onClick={() => { setDateFilter('this_month'); setShowFilterMenu(false); }}
+                    className={`w-full px-4 py-2 text-left hover:bg-blue-50 transition-colors ${dateFilter === 'this_month' ? 'bg-blue-50 text-blue-600 font-medium' : 'text-gray-700'}`}
+                  >
+                    🗓️ เดือนนี้
+                  </button>
+                  <button
+                    onClick={() => { setDateFilter('all'); setShowFilterMenu(false); }}
+                    className={`w-full px-4 py-2 text-left hover:bg-blue-50 transition-colors ${dateFilter === 'all' ? 'bg-blue-50 text-blue-600 font-medium' : 'text-gray-700'}`}
+                  >
+                    📋 ทั้งหมด
+                  </button>
+                </div>
+              )}
+            </div>
 
             <button
               onClick={onNewDocument}
@@ -436,12 +452,11 @@ function DocumentList({
             <div className="p-12 text-center">
               <FileText className="w-16 h-16 text-gray-300 mx-auto mb-4" />
               <p className="text-gray-500">
-                {searchQuery ? 'ไม่พบเอกสารที่ตรงกับการค้นหา' : 'ไม่มีเอกสาร'}
+                {searchQuery ? 'ไม่พบเอกสารที่ตรงกับการค้นหา' : `ไม่มีเอกสาร${getDateFilterLabel()}`}
               </p>
             </div>
           ) : (
             filteredDocuments.map((doc) => {
-              // Support both OCR and regular document formats
               const title = doc.title || doc.subject || 'ไม่มีชื่อ';
               const from = doc.from_department || doc.from || doc.department || 'ไม่ระบุ';
               const date = doc.document_date || doc.date || new Date().toLocaleDateString('th-TH');
