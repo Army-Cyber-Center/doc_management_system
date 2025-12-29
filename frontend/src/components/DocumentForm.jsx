@@ -103,8 +103,128 @@ function DocumentForm({ onClose, onSubmit }) {
   const [progress, setProgress] = useState(0);
   const [progressMessage, setProgressMessage] = useState('');
 
-  // ❌ ลบ useEffect แรกออก - ไม่ต้องเรียก API ทันทีหลังอัพโหลด
-  // เพราะจะให้ปุ่ม "เสร็จสิ้น" เป็นคนเรียก API แทน
+  // ✅✅✅ useEffect ที่เรียก API ทุก 2 วินาที จนกว่าจะได้ OCR data ✅✅✅
+  useEffect(() => {
+    let intervalId = null;
+    let attempts = 0;
+    const maxAttempts = 90; // 3 นาที
+
+    const fetchOCRData = async () => {
+      if (!result?.id) {
+        console.log('❌ ไม่มี result.id');
+        return;
+      }
+
+      if (documentDetails?.ocr_id === result.id) {
+        console.log('✅ มีข้อมูลแล้ว');
+        return;
+      }
+
+      console.log('🚀 เริ่มต้นเรียก API หา OCR data... ID:', result.id);
+
+      setLoadingDetails(true);
+      setProgress(0);
+      setProgressMessage('🔍 กำลังวิเคราะห์เอกสาร...');
+
+      intervalId = setInterval(async () => {
+        attempts++;
+        const progressPercent = Math.min((attempts / maxAttempts) * 90, 90);
+        setProgress(progressPercent);
+
+        const elapsed = attempts * 2;
+        if (elapsed < 20) {
+          setProgressMessage('🔍 กำลังวิเคราะห์เอกสาร...');
+        } else if (elapsed < 40) {
+          setProgressMessage('📝 กำลังแยกข้อความจากเอกสาร...');
+        } else if (elapsed < 60) {
+          setProgressMessage('🔄 กำลังประมวลผลข้อมูล...');
+        } else if (elapsed < 90) {
+          setProgressMessage('⏳ เกือบเสร็จแล้ว กรุณารอสักครู่...');
+        } else if (elapsed < 120) {
+          setProgressMessage('⌛ กำลังประมวลผลขั้นสุดท้าย...');
+        } else {
+          setProgressMessage('🔄 กำลังตรวจสอบข้อมูลอีกครั้ง...');
+        }
+
+        console.log(`🔄 [${elapsed}s] ลองครั้งที่ ${attempts}/${maxAttempts}...`);
+
+        try {
+          const data = await getDocument(result.id);
+          console.log(`📦 [ครั้งที่ ${attempts}] Response:`, data);
+          console.log(`📦 [ครั้งที่ ${attempts}] ocr_data:`, data?.ocr_data);
+
+          // ✅ เช็คว่า ocr_data ต้องไม่เป็น null และมี text ด้วย
+          const hasOCRData = data?.ocr_data !== null && 
+                            data?.ocr_data?.text && 
+                            data?.ocr_data?.text.length > 0;
+
+          console.log(`📊 [ครั้งที่ ${attempts}] hasOCRData:`, hasOCRData);
+
+          if (hasOCRData) {
+            console.log('✅ ได้ข้อมูล OCR แล้ว!');
+            
+            // ✅ หยุด interval
+            clearInterval(intervalId);
+            
+            setProgress(100);
+            setProgressMessage('✅ ประมวลผลสำเร็จ!');
+
+            const rawText = data.ocr_data?.text || '';
+            const parsedFieldsFromAPI = data.ocr_data?.parsed_fields || {};
+
+            console.log('📝 Raw text:', rawText);
+            console.log('📋 Parsed fields:', parsedFieldsFromAPI);
+
+            const parsed = parseOCRText(rawText, parsedFieldsFromAPI);
+            console.log('✅ Parsed result:', parsed);
+
+            setDocumentDetails({
+              ...parsed,
+              ocr_id: result.id,
+              full_raw_text: rawText
+            });
+
+            setTimeout(() => {
+              setLoadingDetails(false);
+              setProgress(0);
+              setProgressMessage('');
+            }, 500);
+          } else {
+            console.log(`⏳ [ครั้งที่ ${attempts}] OCR ยังไม่เสร็จ, รอต่อ...`);
+          }
+
+          // ✅ ถ้าครบ maxAttempts แล้วยังไม่ได้
+          if (attempts >= maxAttempts) {
+            clearInterval(intervalId);
+            setLoadingDetails(false);
+            setProgress(0);
+            setProgressMessage('');
+            
+            alert(
+              '⚠️ ระบบใช้เวลานานเกินไป (เกิน 3 นาที)\n\n' +
+              'กรุณา:\n' +
+              '1. ตรวจสอบขนาดไฟล์ (ควร < 5MB)\n' +
+              '2. ตรวจสอบคุณภาพภาพ (ชัดเจน ไม่เบลอ)\n' +
+              '3. ลองอัพโหลดใหม่อีกครั้ง\n' +
+              '4. ติดต่อผู้ดูแลระบบหากปัญหายังคงอยู่'
+            );
+          }
+        } catch (err) {
+          console.warn(`⚠️ [ครั้งที่ ${attempts}] Error:`, err.message);
+        }
+      }, 2000); // ทุก 2 วินาที
+    };
+
+    fetchOCRData();
+
+    // ✅ Cleanup - หยุด interval เมื่อ component unmount
+    return () => {
+      if (intervalId) {
+        clearInterval(intervalId);
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [result?.id]);
 
   useEffect(() => {
     if (documentDetails) {
@@ -200,125 +320,22 @@ function DocumentForm({ onClose, onSubmit }) {
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
-  // ✅✅✅ ฟังก์ชันสำหรับปุ่ม "เสร็จสิ้น" - เรียก API ทุก 2 วินาที จนกว่าจะได้ข้อมูล OCR ✅✅✅
+  // ✅ ฟังก์ชันสำหรับปุ่ม "เสร็จสิ้น" - แค่บันทึกข้อมูล
   const handleSubmit = async () => {
     if (!result?.id) {
       alert('⚠️ ไม่มีเอกสารให้บันทึก');
       return;
     }
 
-    console.log('🚀 เริ่มกดปุ่มเสร็จสิ้น - เริ่มเรียก API...');
+    console.log('✅ กดปุ่มเสร็จสิ้น - บันทึกข้อมูล');
 
-    setLoadingDetails(true);
-    setProgress(0);
-    setProgressMessage('🔍 กำลังตรวจสอบข้อมูล OCR...');
-
-    const maxAttempts = 90; // ลองสูงสุด 90 ครั้ง (3 นาที)
-    const interval = 2000; // รอ 2 วินาที
-    let attempts = 0;
-
-    try {
-      while (attempts < maxAttempts) {
-        attempts++;
-        const progressPercent = Math.min((attempts / maxAttempts) * 90, 90);
-        setProgress(progressPercent);
-
-        const elapsed = attempts * 2;
-        if (elapsed < 20) {
-          setProgressMessage('🔍 กำลังวิเคราะห์เอกสาร...');
-        } else if (elapsed < 40) {
-          setProgressMessage('📝 กำลังแยกข้อความจากเอกสาร...');
-        } else if (elapsed < 60) {
-          setProgressMessage('🔄 กำลังประมวลผลข้อมูล...');
-        } else if (elapsed < 90) {
-          setProgressMessage('⏳ เกือบเสร็จแล้ว กรุณารอสักครู่...');
-        } else if (elapsed < 120) {
-          setProgressMessage('⌛ กำลังประมวลผลขั้นสุดท้าย...');
-        } else {
-          setProgressMessage('🔄 กำลังตรวจสอบข้อมูลอีกครั้ง...');
-        }
-
-        console.log(`🔄 [${elapsed}s] ลองครั้งที่ ${attempts}/${maxAttempts}...`);
-
-        try {
-          const data = await getDocument(result.id);
-          console.log(`📦 [ครั้งที่ ${attempts}] Response:`, data);
-          console.log(`📦 [ครั้งที่ ${attempts}] ocr_data:`, data?.ocr_data);
-
-          // ✅ เช็คว่า ocr_data ต้องไม่เป็น null และมี text ด้วย
-          const hasOCRData = data?.ocr_data !== null && 
-                            data?.ocr_data?.text && 
-                            data?.ocr_data?.text.length > 0;
-
-          console.log(`📊 [ครั้งที่ ${attempts}] hasOCRData:`, hasOCRData);
-
-          if (hasOCRData) {
-            console.log('✅ ได้ข้อมูล OCR แล้ว!');
-            setProgress(100);
-            setProgressMessage('✅ ประมวลผลสำเร็จ!');
-
-            const rawText = data.ocr_data?.text || '';
-            const parsedFieldsFromAPI = data.ocr_data?.parsed_fields || {};
-
-            console.log('📝 Raw text:', rawText);
-            console.log('📋 Parsed fields:', parsedFieldsFromAPI);
-
-            const parsed = parseOCRText(rawText, parsedFieldsFromAPI);
-            console.log('✅ Parsed result:', parsed);
-
-            setDocumentDetails({
-              ...parsed,
-              ocr_id: result.id,
-              full_raw_text: rawText
-            });
-
-            setTimeout(() => {
-              setLoadingDetails(false);
-              setProgress(0);
-              setProgressMessage('');
-              
-              if (onSubmit) {
-                onSubmit({
-                  ...formData,
-                  ...parsed,
-                  ocr_id: result.id,
-                  full_raw_text: rawText
-                });
-              }
-            }, 500);
-
-            return; // ✅ ออกจาก loop
-          } else {
-            console.log(`⏳ [ครั้งที่ ${attempts}] OCR ยังไม่เสร็จ, รอ 2 วินาที...`);
-          }
-        } catch (err) {
-          console.warn(`⚠️ [ครั้งที่ ${attempts}] Error:`, err.message);
-        }
-
-        // ✅ รอ 2 วินาทีก่อนลองใหม่
-        if (attempts < maxAttempts) {
-          console.log(`⏱️ รอ 2 วินาทีก่อนลองครั้งถัดไป...`);
-          await new Promise(resolve => setTimeout(resolve, interval));
-        }
-      }
-
-      // ❌ ถ้าลองครบแล้วยังไม่ได้
-      throw new Error('⏱️ ระบบใช้เวลานานเกินไป (เกิน 3 นาที)');
-
-    } catch (err) {
-      console.error('❌ เกิดข้อผิดพลาด:', err);
-      setProgress(0);
-      setProgressMessage('');
-      setLoadingDetails(false);
-
-      alert(
-        '⚠️ ระบบใช้เวลานานเกินไป (เกิน 3 นาที)\n\n' +
-        'กรุณา:\n' +
-        '1. ตรวจสอบขนาดไฟล์ (ควร < 5MB)\n' +
-        '2. ตรวจสอบคุณภาพภาพ (ชัดเจน ไม่เบลอ)\n' +
-        '3. ลองอัพโหลดใหม่อีกครั้ง\n' +
-        '4. ติดต่อผู้ดูแลระบบหากปัญหายังคงอยู่'
-      );
+    if (onSubmit) {
+      onSubmit({
+        ...formData,
+        ...documentDetails,
+        ocr_id: result.id,
+        full_raw_text: documentDetails?.full_raw_text || ''
+      });
     }
   };
 
@@ -877,28 +894,6 @@ function DocumentForm({ onClose, onSubmit }) {
                     ประมวลผลเสร็จสมบูรณ์!
                   </p>
                 </div>
-              )}
-
-              {progress < 100 && (
-                <button
-                  onClick={() => {
-                    if (window.confirm(
-                      '⚠️ การยกเลิกจะหยุดการประมวลผล OCR\n\n' +
-                      'คุณต้องการยกเลิกหรือไม่?'
-                    )) {
-                      console.log('❌ ผู้ใช้ยกเลิกการประมวลผล OCR');
-                      setLoadingDetails(false);
-                      setProgress(0);
-                      setProgressMessage('');
-                      setShowFileOptions(true);
-                      setFormData(prev => ({ ...prev, file: null }));
-                      reset();
-                    }
-                  }}
-                  className="mt-4 w-full px-4 py-2 border-2 border-red-200 text-red-600 rounded-lg hover:bg-red-50 transition-all text-sm font-medium"
-                >
-                  ❌ ยกเลิกการประมวลผล
-                </button>
               )}
             </div>
           </div>
