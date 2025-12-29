@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { X, User, Calendar, FileText, Edit, TrendingUp, Save } from 'lucide-react';
 
-function DocumentDetail({ document = null, onClose = () => {}, onUpdate = () => {} }) {
+function DocumentDetail({ document, onClose, onUpdate }) {
   const API_URL = process.env.REACT_APP_API_URL;
   
-  // ✅ ประกาศ hooks ก่อน (ต้องอยู่ด้านบนสุด)
+  // ✅ ประกาศ ALL hooks ก่อน ANY return statement
   const [workflowHistory, setWorkflowHistory] = useState([]);
   const [loadingWorkflow, setLoadingWorkflow] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
@@ -23,13 +23,24 @@ function DocumentDetail({ document = null, onClose = () => {}, onUpdate = () => 
   const [currentStatus, setCurrentStatus] = useState('รับเข้า');
   const [completedByName, setCompletedByName] = useState('');
 
-  // ✅ Guard Clause - ตรวจสอบหลัง hooks
+  // ✅ Helper function ที่ไม่ใช่ hook
+  const normalizeStatus = (status) => {
+    if (!status) return 'รับเข้า';
+    const normalized = status.toLowerCase().trim();
+    if (normalized === 'รับแล้ว' || normalized === 'received' || normalized === 'incoming' || normalized === 'processed') return 'รับเข้า';
+    if (normalized === 'รออนุมัติ' || normalized === 'pending approval' || normalized === 'approval pending' || normalized === 'กำลังดำเนินการ' || normalized === 'in_progress') return 'รออนุมัติ';
+    if (normalized === 'ส่งออก' || normalized === 'sent out' || normalized === 'sent_out' || normalized === 'เอกสารส่งออก') return 'ส่งออก';
+    if (normalized === 'เสร็จสิ้น' || normalized === 'completed' || normalized === 'done') return 'เสร็จสิ้น';
+    return 'รับเข้า';
+  };
+
+  // ✅ Guard clause หลัง hooks
   if (!document || !document.id) {
+    console.warn('⚠️ DocumentDetail: Invalid document', document);
     return (
       <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
         <div className="bg-white rounded-2xl p-6 max-w-md w-full text-center">
           <p className="text-red-600 font-semibold mb-4">⚠️ ไม่พบข้อมูลเอกสาร</p>
-          <p className="text-sm text-gray-600 mb-4">กรุณาลองใหม่อีกครั้ง</p>
           <button
             onClick={onClose}
             className="px-6 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-all"
@@ -40,12 +51,12 @@ function DocumentDetail({ document = null, onClose = () => {}, onUpdate = () => 
       </div>
     );
   }
-  
-  console.log('🔍 DocumentDetail received:', document);
-  
+
+  console.log('✅ DocumentDetail loaded:', document);
+
   const normalizedDoc = {
     id: document.id,
-    title: document.title,
+    title: document.title || 'ไม่มีชื่อ',
     type: document.document_type,
     from: document.ocr_data?.parsed_fields?.['ส่วนราชการ'] || document.from_department || '-',
     to: document.to_user_id || document.to_department || '-',
@@ -60,35 +71,25 @@ function DocumentDetail({ document = null, onClose = () => {}, onUpdate = () => 
     completed_by_name: document.completed_by_name || ''
   };
 
-  // ✅ useEffect สำหรับ initialize data
+  // ✅ useEffect: Initialize data
   useEffect(() => {
     if (document && document.id) {
-      const normalizeStatus = (status) => {
-        if (!status) return 'รับเข้า';
-        const normalized = status.toLowerCase().trim();
-        if (normalized === 'รับแล้ว' || normalized === 'received' || normalized === 'incoming' || normalized === 'processed') return 'รับเข้า';
-        if (normalized === 'รออนุมัติ' || normalized === 'pending approval' || normalized === 'approval pending' || normalized === 'กำลังดำเนินการ' || normalized === 'in_progress') return 'รออนุมัติ';
-        if (normalized === 'ส่งออก' || normalized === 'sent out' || normalized === 'sent_out' || normalized === 'เอกสารส่งออก') return 'ส่งออก';
-        if (normalized === 'เสร็จสิ้น' || normalized === 'completed' || normalized === 'done') return 'เสร็จสิ้น';
-        return 'รับเข้า';
-      };
-
       setEditData({
-        title: normalizedDoc.title || '',
-        from: normalizedDoc.from || '',
-        to: normalizedDoc.to || '',
-        date: normalizedDoc.date || '',
-        status: normalizeStatus(normalizedDoc.status) || 'รับเข้า',
-        priority: normalizedDoc.priority || 'ปกติ',
-        subject: normalizedDoc.subject || '',
-        department: normalizedDoc.department || '',
-        documentNo: normalizedDoc.documentNo || ''
+        title: normalizedDoc.title,
+        from: normalizedDoc.from,
+        to: normalizedDoc.to,
+        date: normalizedDoc.date,
+        status: normalizeStatus(normalizedDoc.status),
+        priority: normalizedDoc.priority,
+        subject: normalizedDoc.subject,
+        department: normalizedDoc.department,
+        documentNo: normalizedDoc.documentNo
       });
-
       setCurrentStatus(normalizeStatus(normalizedDoc.status));
     }
   }, [document]);
 
+  // ✅ useEffect: Fetch workflow history
   useEffect(() => {
     const fetchWorkflowHistory = async () => {
       if (!document || !document.id) return;
@@ -98,29 +99,26 @@ function DocumentDetail({ document = null, onClose = () => {}, onUpdate = () => 
         const token = localStorage.getItem('access_token');
         if (!token) return;
 
-        const headers = {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        };
-
         const response = await fetch(`${API_URL}/workflows/document/${document.id}`, {
           method: 'GET',
-          headers
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
         });
 
         if (response.ok) {
           const data = await response.json();
-          console.log('📋 Workflow History:', data);
-          setWorkflowHistory(Array.isArray(data.workflows) ? data.workflows : data.workflows || []);
+          const workflows = Array.isArray(data.workflows) ? data.workflows : [];
+          setWorkflowHistory(workflows);
           
-          // Update completedByName
-          const completeWorkflow = (Array.isArray(data.workflows) ? data.workflows : []).find(w => w.action === 'complete');
+          const completeWorkflow = workflows.find(w => w.action === 'complete');
           if (completeWorkflow?.completed_by_name) {
             setCompletedByName(completeWorkflow.completed_by_name);
           }
         }
       } catch (error) {
-        console.error('❌ Failed to fetch workflow history:', error);
+        console.error('❌ Workflow fetch failed:', error);
       } finally {
         setLoadingWorkflow(false);
       }
@@ -129,18 +127,7 @@ function DocumentDetail({ document = null, onClose = () => {}, onUpdate = () => 
     fetchWorkflowHistory();
   }, [document, API_URL]);
 
-  const normalizeStatus = (status) => {
-    if (!status) return 'รับเข้า';
-    const normalized = status.toLowerCase().trim();
-    if (normalized === 'รับแล้ว' || normalized === 'received' || normalized === 'incoming' || normalized === 'processed') return 'รับเข้า';
-    if (normalized === 'รออนุมัติ' || normalized === 'pending approval' || normalized === 'approval pending' || normalized === 'กำลังดำเนินการ' || normalized === 'in_progress') return 'รออนุมัติ';
-    if (normalized === 'ส่งออก' || normalized === 'sent out' || normalized === 'sent_out' || normalized === 'เอกสารส่งออก') return 'ส่งออก';
-    if (normalized === 'เสร็จสิ้น' || normalized === 'completed' || normalized === 'done') return 'เสร็จสิ้น';
-    return 'รับเข้า';
-  };
-
   const handleUnauthorized = () => {
-    console.error('🔐 Token expired or invalid');
     localStorage.removeItem('access_token');
     localStorage.removeItem('refresh_token');
     window.location.href = '/login';
@@ -150,7 +137,7 @@ function DocumentDetail({ document = null, onClose = () => {}, onUpdate = () => 
     const token = localStorage.getItem('access_token');
     if (!token) {
       handleUnauthorized();
-      throw new Error('Authentication required.');
+      throw new Error('Authentication required');
     }
     return {
       'Authorization': `Bearer ${token}`,
@@ -159,9 +146,9 @@ function DocumentDetail({ document = null, onClose = () => {}, onUpdate = () => 
   };
 
   const isStatusActive = (status) => {
-    const normalizedStatus = status.toLowerCase().replace(/\s+/g, '');
-    const normalizedCurrent = currentStatus.toLowerCase().replace(/\s+/g, '');
-    return normalizedStatus === normalizedCurrent;
+    const s1 = status.toLowerCase().replace(/\s+/g, '');
+    const s2 = currentStatus.toLowerCase().replace(/\s+/g, '');
+    return s1 === s2;
   };
 
   const handleUpdateWorkflow = async () => {
@@ -188,32 +175,21 @@ function DocumentDetail({ document = null, onClose = () => {}, onUpdate = () => 
         return;
       }
 
-      console.log('🔄 Starting update process...');
-      console.log('📋 Document ID:', document.id);
-      console.log('📋 Current Status:', currentStatus);
-      console.log('📋 Next Status:', next.nextStatus);
-      console.log('📋 Action:', next.action);
-
       const workflowPayload = {
         document_id: parseInt(document.id),
         action: next.action,
-        comment: `เปลี่ยนสถานะเป็น ${next.nextStatus}`,
-        completed_by_name: next.action === 'complete' ? completedByName.trim() : null
+        comment: `เปลี่ยนสถานะเป็น ${next.nextStatus}`
       };
 
-      if (workflowPayload.completed_by_name === null) {
-        delete workflowPayload.completed_by_name;
+      if (next.action === 'complete') {
+        workflowPayload.completed_by_name = completedByName.trim();
       }
-
-      console.log('📤 Workflow payload:', JSON.stringify(workflowPayload, null, 2));
 
       const workflowResponse = await fetch(`${API_URL}/workflows/`, {
         method: 'POST',
         headers,
         body: JSON.stringify(workflowPayload)
       });
-
-      console.log('📥 Workflow response status:', workflowResponse.status);
 
       if (workflowResponse.status === 401) {
         handleUnauthorized();
@@ -223,31 +199,15 @@ function DocumentDetail({ document = null, onClose = () => {}, onUpdate = () => 
       if (!workflowResponse.ok) {
         const errorText = await workflowResponse.text();
         console.error('❌ Workflow error:', errorText);
-        
-        try {
-          const errorJson = JSON.parse(errorText);
-          alert(`⚠️ ไม่สามารถอัพเดท workflow ได้\n\n${JSON.stringify(errorJson, null, 2)}`);
-        } catch (e) {
-          alert(`⚠️ ไม่สามารถอัพเดท workflow ได้\n\n${errorText}`);
-        }
-        
+        alert('⚠️ ไม่สามารถอัพเดท workflow ได้');
         setIsLoading(false);
         return;
       }
 
-      const workflowData = await workflowResponse.json();
-      console.log('✅ Workflow created:', workflowData);
-
-      const docPayload = {
-        status: next.nextStatus,
-        completed_by_name: next.action === 'complete' ? completedByName.trim() : null
-      };
-
-      if (docPayload.completed_by_name === null) {
-        delete docPayload.completed_by_name;
+      const docPayload = { status: next.nextStatus };
+      if (next.action === 'complete') {
+        docPayload.completed_by_name = completedByName.trim();
       }
-
-      console.log('📤 Document payload:', JSON.stringify(docPayload, null, 2));
 
       const docResponse = await fetch(`${API_URL}/documents/${document.id}`, {
         method: 'PUT',
@@ -255,18 +215,12 @@ function DocumentDetail({ document = null, onClose = () => {}, onUpdate = () => 
         body: JSON.stringify(docPayload)
       });
 
-      console.log('📥 Document response status:', docResponse.status);
-
       if (docResponse.status === 401) {
         handleUnauthorized();
         return;
       }
 
       if (!docResponse.ok) {
-        const errorText = await docResponse.text();
-        console.error('❌ Document update error:', errorText);
-        
-        console.log('🔄 Trying PATCH instead...');
         const docPatchResponse = await fetch(`${API_URL}/documents/${document.id}`, {
           method: 'PATCH',
           headers,
@@ -274,24 +228,12 @@ function DocumentDetail({ document = null, onClose = () => {}, onUpdate = () => 
         });
 
         if (!docPatchResponse.ok) {
-          const patchErrorText = await docPatchResponse.text();
-          console.error('❌ Document PATCH also failed:', patchErrorText);
-          throw new Error('Failed to update document status');
+          throw new Error('Failed to update document');
         }
-
-        const docData = await docPatchResponse.json();
-        console.log('✅ Document updated with PATCH:', docData);
-      } else {
-        const docData = await docResponse.json();
-        console.log('✅ Document updated:', docData);
       }
 
       setCurrentStatus(next.nextStatus);
-      await onUpdate(document.id, { 
-        status: next.nextStatus, 
-        completed_by_name: next.action === 'complete' ? completedByName.trim() : null 
-      });
-
+      await onUpdate(document.id, docPayload);
       alert('✅ อัพเดทสถานะสำเร็จ');
 
       setTimeout(() => {
@@ -300,33 +242,29 @@ function DocumentDetail({ document = null, onClose = () => {}, onUpdate = () => 
       }, 1000);
 
     } catch (error) {
-      console.error('❌ Status update failed:', error);
-      alert('อัพเดทสถานะล้มเหลว: ' + error.message);
+      console.error('❌ Update failed:', error);
+      alert('อัพเดทล้มเหลว: ' + error.message);
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleSave = async () => {
-    console.log('💾 บันทึก:', editData);
     setIsLoading(true);
     try {
       const headers = getAuthHeaders();
       const payload = {
-        document_id: document.id,
         title: editData.title,
         from_department: editData.from,
         to_department: editData.to,
-        document_date: editData.date,
         status: editData.status,
         priority: editData.priority,
         subject: editData.subject,
-        department: editData.department,
         document_number: editData.documentNo
       };
       
       const response = await fetch(`${API_URL}/documents/${document.id}`, {
-        method: 'PATCH',
+        method: 'PUT',
         headers,
         body: JSON.stringify(payload)
       });
@@ -336,17 +274,16 @@ function DocumentDetail({ document = null, onClose = () => {}, onUpdate = () => 
         return;
       }
 
-      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
-      console.log('✅ Document updated');
       setCurrentStatus(normalizeStatus(editData.status));
       await onUpdate(document.id, payload);
       setIsEditing(false);
-      alert('✅ บันทึกข้อมูลสำเร็จ');
+      alert('✅ บันทึกสำเร็จ');
       
     } catch (error) {
-      console.error('❌ บันทึกล้มเหลว:', error);
-      alert('บันทึกไม่สำเร็จ: ' + error.message);
+      console.error('❌ Save failed:', error);
+      alert('บันทึกล้มเหลว: ' + error.message);
     } finally {
       setIsLoading(false);
     }
@@ -354,19 +291,19 @@ function DocumentDetail({ document = null, onClose = () => {}, onUpdate = () => 
 
   const handleCancel = () => {
     setEditData({
-      title: normalizedDoc.title || '',
-      from: normalizedDoc.from || '',
-      to: normalizedDoc.to || '',
-      date: normalizedDoc.date || '',
-      status: normalizeStatus(normalizedDoc.status) || 'รับเข้า',
-      priority: normalizedDoc.priority || 'ปกติ',
-      subject: normalizedDoc.subject || '',
-      department: normalizedDoc.department || '',
-      documentNo: normalizedDoc.documentNo || ''
+      title: normalizedDoc.title,
+      from: normalizedDoc.from,
+      to: normalizedDoc.to,
+      date: normalizedDoc.date,
+      status: normalizeStatus(normalizedDoc.status),
+      priority: normalizedDoc.priority,
+      subject: normalizedDoc.subject,
+      department: normalizedDoc.department,
+      documentNo: normalizedDoc.documentNo
     });
     setIsEditing(false);
   };
-  
+
   const getStatusColor = (status) => {
     const normalized = normalizeStatus(status);
     switch(normalized) {
@@ -395,43 +332,37 @@ function DocumentDetail({ document = null, onClose = () => {}, onUpdate = () => 
     return 'อัพเดทสถานะ';
   };
 
-  const getTimelineSteps = () => {
-    return [
-      { 
-        step: 1, status: 'รับเข้า', 
-        time: normalizedDoc.created_at ? new Date(normalizedDoc.created_at).toLocaleString('th-TH') : '',
-        color: 'green', active: true,
-        completed_by_name: ''
-      },
-      { 
-        step: 2, status: 'รออนุมัติ', 
-        time: isStatusActive('รออนุมัติ') ? new Date().toLocaleString('th-TH') : '',
-        color: 'blue', 
-        active: isStatusActive('รออนุมัติ') || isStatusActive('ส่งออก') || isStatusActive('เสร็จสิ้น'),
-        completed_by_name: ''
-      },
-      { 
-        step: 3, status: 'ส่งออก', 
-        time: isStatusActive('ส่งออก') ? new Date().toLocaleString('th-TH') : '',
-        color: 'orange', 
-        active: isStatusActive('ส่งออก') || isStatusActive('เสร็จสิ้น'),
-        completed_by_name: ''
-      },
-      { 
-        step: 4, status: 'เสร็จสิ้น', 
-        time: isStatusActive('เสร็จสิ้น') ? new Date().toLocaleString('th-TH') : '',
-        color: 'purple', 
-        active: isStatusActive('เสร็จสิ้น'),
-        completed_by_name: isStatusActive('เสร็จสิ้น') ? completedByName : '',
-        showName: isStatusActive('เสร็จสิ้น') && completedByName.trim().length > 0
-      }
-    ];
-  };
+  const getTimelineSteps = () => [
+    { 
+      step: 1, status: 'รับเข้า', 
+      time: normalizedDoc.created_at ? new Date(normalizedDoc.created_at).toLocaleString('th-TH') : '',
+      color: 'green', active: true
+    },
+    { 
+      step: 2, status: 'รออนุมัติ', 
+      time: isStatusActive('รออนุมัติ') ? new Date().toLocaleString('th-TH') : '',
+      color: 'blue', 
+      active: isStatusActive('รออนุมัติ') || isStatusActive('ส่งออก') || isStatusActive('เสร็จสิ้น')
+    },
+    { 
+      step: 3, status: 'ส่งออก', 
+      time: isStatusActive('ส่งออก') ? new Date().toLocaleString('th-TH') : '',
+      color: 'orange', 
+      active: isStatusActive('ส่งออก') || isStatusActive('เสร็จสิ้น')
+    },
+    { 
+      step: 4, status: 'เสร็จสิ้น', 
+      time: isStatusActive('เสร็จสิ้น') ? new Date().toLocaleString('th-TH') : '',
+      color: 'purple', 
+      active: isStatusActive('เสร็จสิ้น'),
+      completed_by_name: isStatusActive('เสร็จสิ้น') ? completedByName : '',
+      showName: isStatusActive('เสร็จสิ้น') && completedByName.trim().length > 0
+    }
+  ];
 
   return (
     <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-3xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden">
-        {/* Header */}
         <div className="sticky top-0 bg-gradient-to-r from-blue-50 to-indigo-50 p-6 border-b border-gray-100">
           <div className="flex items-start justify-between">
             <div className="flex-1 pr-4">
@@ -444,7 +375,7 @@ function DocumentDetail({ document = null, onClose = () => {}, onUpdate = () => 
                   placeholder="ชื่อเอกสาร"
                 />
               ) : (
-                <h2 className="text-2xl font-bold text-gray-900 mb-2">{normalizedDoc.title || 'ไม่มีชื่อ'}</h2>
+                <h2 className="text-2xl font-bold text-gray-900 mb-2">{normalizedDoc.title}</h2>
               )}
 
               <div className="flex gap-2 flex-wrap">
@@ -489,7 +420,6 @@ function DocumentDetail({ document = null, onClose = () => {}, onUpdate = () => 
           </div>
         </div>
         
-        {/* Body */}
         <div className="p-6 space-y-6 overflow-y-auto max-h-[calc(90vh-250px)]">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl p-5 border-2 border-blue-100">
@@ -634,7 +564,6 @@ function DocumentDetail({ document = null, onClose = () => {}, onUpdate = () => 
           )}
         </div>
 
-        {/* Footer */}
         <div className="flex gap-4 p-6 border-t border-gray-100 bg-gradient-to-r from-gray-50 to-blue-50">
           {isEditing ? (
             <>
