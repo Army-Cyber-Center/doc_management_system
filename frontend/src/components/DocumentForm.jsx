@@ -327,15 +327,52 @@ function DocumentForm({ onClose, onSubmit }) {
       return;
     }
 
-    console.log('✅ กดปุ่มเสร็จสิ้น - บันทึกข้อมูล');
+    console.log('✅ กดปุ่มเสร็จสิ้น - กำลังบันทึกข้อมูล...');
+    console.log('📦 formData:', formData);
+    console.log('📦 documentDetails:', documentDetails);
+    console.log('📦 result:', result);
 
-    if (onSubmit) {
-      onSubmit({
-        ...formData,
-        ...documentDetails,
-        ocr_id: result.id,
-        full_raw_text: documentDetails?.full_raw_text || ''
+    try {
+      if (onSubmit) {
+        // ✅ จัดรูปแบบข้อมูลให้ถูกต้อง
+        const submitData = {
+          id: result.id, // ✅ ส่ง id ของเอกสารที่อัพโหลดแล้ว
+          type: formData.type,
+          title: formData.title || 'ไม่มีชื่อเอกสาร',
+          from: formData.from || documentDetails?.from || '',
+          to: formData.to || '',
+          priority: formData.priority || 'ปกติ',
+          department: formData.department || documentDetails?.department || '',
+          documentNo: formData.documentNo || documentDetails?.documentNo || '',
+          date: formData.date || documentDetails?.date || '',
+          subject: formData.subject || documentDetails?.subject || '',
+          file: formData.file,
+          ocr_id: result.id,
+          full_raw_text: documentDetails?.full_raw_text || ''
+        };
+
+        console.log('📤 ข้อมูลที่จะส่ง:', submitData);
+
+        await onSubmit(submitData);
+        
+        console.log('✅ บันทึกสำเร็จ!');
+      }
+    } catch (err) {
+      console.error('❌ เกิดข้อผิดพลาดในการบันทึก:', err);
+      console.error('❌ Error details:', {
+        message: err.message,
+        stack: err.stack,
+        response: err.response
       });
+      
+      alert(
+        '⚠️ ไม่สามารถบันทึกเอกสารได้\n\n' +
+        'กรุณาตรวจสอบ:\n' +
+        '1. ข้อมูลในฟอร์มครบถ้วนหรือไม่\n' +
+        '2. เชื่อมต่ออินเทอร์เน็ตหรือไม่\n' +
+        '3. ติดต่อผู้ดูแลระบบหากปัญหายังคงอยู่\n\n' +
+        `Error: ${err.message}`
+      );
     }
   };
 
