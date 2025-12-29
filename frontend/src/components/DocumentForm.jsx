@@ -103,76 +103,8 @@ function DocumentForm({ onClose, onSubmit }) {
   const [progress, setProgress] = useState(0);
   const [progressMessage, setProgressMessage] = useState('');
 
-  useEffect(() => {
-    const fetchFullDocumentDetails = async () => {
-      if (!result?.id) {
-        console.log('❌ ไม่มี result.id');
-        return;
-      }
-
-      if (documentDetails?.ocr_id === result.id) {
-        console.log('✅ มีข้อมูลแล้ว');
-        return;
-      }
-
-      console.log('🚀 เริ่มต้นการดึงข้อมูล OCR... ID:', result.id);
-
-      setLoadingDetails(true);
-      setProgress(50);
-      setProgressMessage('🔍 กำลังดึงข้อมูล OCR...');
-
-      try {
-        // ✅ เรียก API ครั้งเดียว ไม่มี polling
-        const data = await getDocument(result.id);
-
-        setProgress(100);
-        setProgressMessage('✅ ประมวลผลสำเร็จ!');
-        console.log('✅ ดึงข้อมูลสำเร็จ! Full data:', data);
-
-        // ✅ ดึง raw text จาก API จริง
-        const rawText = data.ocr_data?.text || '';
-
-        // ✅ ดึง parsed_fields จาก API จริง
-        const parsedFieldsFromAPI = data.ocr_data?.parsed_fields || {};
-
-        console.log('📝 Raw text:', rawText);
-        console.log('📋 Parsed fields from API:', parsedFieldsFromAPI);
-
-        // ✅ ส่ง parsed_fields เข้าไปด้วย
-        const parsed = parseOCRText(rawText, parsedFieldsFromAPI);
-        console.log('✅ Parsed result:', parsed);
-
-        setDocumentDetails({
-          ...parsed,
-          ocr_id: result.id,
-          full_raw_text: rawText
-        });
-
-        setTimeout(() => {
-          setLoadingDetails(false);
-          setProgress(0);
-          setProgressMessage('');
-        }, 500);
-
-      } catch (err) {
-        console.error('❌ เกิดข้อผิดพลาด:', err);
-        setProgress(0);
-        setProgressMessage('');
-        setLoadingDetails(false);
-
-        alert(
-          '⚠️ ไม่สามารถดึงข้อมูล OCR ได้\n\n' +
-          'กรุณา:\n' +
-          '1. ตรวจสอบการเชื่อมต่ออินเทอร์เน็ต\n' +
-          '2. ลองอัพโหลดใหม่อีกครั้ง\n' +
-          '3. ติดต่อผู้ดูแลระบบหากปัญหายังคงอยู่'
-        );
-      }
-    };
-
-    fetchFullDocumentDetails();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [result?.id]);
+  // ❌ ลบ useEffect แรกออก - ไม่ต้องเรียก API ทันทีหลังอัพโหลด
+  // เพราะจะให้ปุ่ม "เสร็จสิ้น" เป็นคนเรียก API แทน
 
   useEffect(() => {
     if (documentDetails) {
@@ -268,19 +200,21 @@ function DocumentForm({ onClose, onSubmit }) {
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
-  // ✅ ฟังก์ชันสำหรับปุ่ม "เสร็จสิ้น" - เรียก API ทุก 2 วินาที จนกว่าจะได้ข้อมูล OCR
+  // ✅✅✅ ฟังก์ชันสำหรับปุ่ม "เสร็จสิ้น" - เรียก API ทุก 2 วินาที จนกว่าจะได้ข้อมูล OCR ✅✅✅
   const handleSubmit = async () => {
     if (!result?.id) {
       alert('⚠️ ไม่มีเอกสารให้บันทึก');
       return;
     }
 
+    console.log('🚀 เริ่มกดปุ่มเสร็จสิ้น - เริ่มเรียก API...');
+
     setLoadingDetails(true);
     setProgress(0);
     setProgressMessage('🔍 กำลังตรวจสอบข้อมูล OCR...');
 
-    const maxAttempts = 90; // ลองสูงสุด 90 ครั้ง (3 นาที: 90 * 2 วินาที = 180 วินาที)
-    const interval = 2000; // รอ 2 วินาทีระหว่างการลอง
+    const maxAttempts = 90; // ลองสูงสุด 90 ครั้ง (3 นาที)
+    const interval = 2000; // รอ 2 วินาที
     let attempts = 0;
 
     try {
@@ -289,7 +223,7 @@ function DocumentForm({ onClose, onSubmit }) {
         const progressPercent = Math.min((attempts / maxAttempts) * 90, 90);
         setProgress(progressPercent);
 
-        const elapsed = attempts * 2; // เวลาที่ผ่านไป (วินาที)
+        const elapsed = attempts * 2;
         if (elapsed < 20) {
           setProgressMessage('🔍 กำลังวิเคราะห์เอกสาร...');
         } else if (elapsed < 40) {
@@ -308,19 +242,21 @@ function DocumentForm({ onClose, onSubmit }) {
 
         try {
           const data = await getDocument(result.id);
-          console.log('📦 Response from API:', data);
+          console.log(`📦 [ครั้งที่ ${attempts}] Response:`, data);
+          console.log(`📦 [ครั้งที่ ${attempts}] ocr_data:`, data?.ocr_data);
 
-          // ✅✅✅ เช็คว่า ocr_data ต้องไม่เป็น null และมี text ด้วย ✅✅✅
+          // ✅ เช็คว่า ocr_data ต้องไม่เป็น null และมี text ด้วย
           const hasOCRData = data?.ocr_data !== null && 
                             data?.ocr_data?.text && 
                             data?.ocr_data?.text.length > 0;
+
+          console.log(`📊 [ครั้งที่ ${attempts}] hasOCRData:`, hasOCRData);
 
           if (hasOCRData) {
             console.log('✅ ได้ข้อมูล OCR แล้ว!');
             setProgress(100);
             setProgressMessage('✅ ประมวลผลสำเร็จ!');
 
-            // ✅ ดึง raw text และ parsed_fields
             const rawText = data.ocr_data?.text || '';
             const parsedFieldsFromAPI = data.ocr_data?.parsed_fields || {};
 
@@ -330,7 +266,6 @@ function DocumentForm({ onClose, onSubmit }) {
             const parsed = parseOCRText(rawText, parsedFieldsFromAPI);
             console.log('✅ Parsed result:', parsed);
 
-            // ✅ อัพเดตข้อมูลในฟอร์ม
             setDocumentDetails({
               ...parsed,
               ocr_id: result.id,
@@ -342,7 +277,6 @@ function DocumentForm({ onClose, onSubmit }) {
               setProgress(0);
               setProgressMessage('');
               
-              // ✅ เรียก onSubmit พร้อมข้อมูลที่สมบูรณ์
               if (onSubmit) {
                 onSubmit({
                   ...formData,
@@ -353,22 +287,22 @@ function DocumentForm({ onClose, onSubmit }) {
               }
             }, 500);
 
-            return; // ✅ ออกจาก loop เมื่อได้ข้อมูลแล้ว
+            return; // ✅ ออกจาก loop
           } else {
-            // ⚠️ OCR ยังไม่เสร็จ
-            console.log(`⏳ OCR ยังไม่เสร็จ (ocr_data = ${data?.ocr_data}), รอต่อ...`);
+            console.log(`⏳ [ครั้งที่ ${attempts}] OCR ยังไม่เสร็จ, รอ 2 วินาที...`);
           }
         } catch (err) {
-          console.warn(`⚠️ ครั้งที่ ${attempts} error:`, err.message);
+          console.warn(`⚠️ [ครั้งที่ ${attempts}] Error:`, err.message);
         }
 
         // ✅ รอ 2 วินาทีก่อนลองใหม่
         if (attempts < maxAttempts) {
+          console.log(`⏱️ รอ 2 วินาทีก่อนลองครั้งถัดไป...`);
           await new Promise(resolve => setTimeout(resolve, interval));
         }
       }
 
-      // ❌ ถ้าลองครบแล้วยังไม่ได้ข้อมูล
+      // ❌ ถ้าลองครบแล้วยังไม่ได้
       throw new Error('⏱️ ระบบใช้เวลานานเกินไป (เกิน 3 นาที)');
 
     } catch (err) {
@@ -842,7 +776,7 @@ function DocumentForm({ onClose, onSubmit }) {
                   />
                 </div>
                 
-                {/* ✅ ปุ่มเสร็จสิ้น - เรียก handleSubmit */}
+                {/* ✅ ปุ่มเสร็จสิ้น */}
                 <div className="flex gap-4 pt-4">
                   <button
                     type="button"
@@ -869,11 +803,10 @@ function DocumentForm({ onClose, onSubmit }) {
         </div>
       </div>
 
-      {/* Loading Modal with Close Button */}
+      {/* Loading Modal */}
       {loadingDetails && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-[9999]">
           <div className="bg-white rounded-2xl p-8 max-w-md w-full mx-4 shadow-2xl relative">
-            {/* ปุ่มปิด */}
             <button
               onClick={() => {
                 if (window.confirm(
