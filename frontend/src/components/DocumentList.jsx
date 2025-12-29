@@ -10,8 +10,12 @@ import {
   FileText,
   ArrowUpRight,
   CheckCircle2,
-  Search
+  Search,
+  X,
+  CalendarDays
 } from 'lucide-react';
+import DatePicker from 'react-datepicker';
+import 'react-datepicker/dist/react-datepicker.css';
 
 function DocumentList({
   activeTab,
@@ -36,13 +40,18 @@ function DocumentList({
 
   // 🔍 Search & Filter
   const [searchQuery, setSearchQuery] = useState('');
-  const [dateFilter, setDateFilter] = useState('today'); // ✅ เพิ่ม date filter
-  const [showFilterMenu, setShowFilterMenu] = useState(false); // ✅ แสดง/ซ่อน filter menu
+  const [dateFilter, setDateFilter] = useState('today'); // 'today', 'this_week', 'this_month', 'custom', 'all'
+  const [showFilterMenu, setShowFilterMenu] = useState(false);
   
-  // ✅ Fetch documents เมื่อ activeTab หรือ dateFilter เปลี่ยน
+  // ✅ Date Range Picker
+  const [startDate, setStartDate] = useState(new Date());
+  const [endDate, setEndDate] = useState(new Date());
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  
+  // ✅ Fetch documents เมื่อ activeTab, dateFilter, หรือ custom dates เปลี่ยน
   useEffect(() => {
     fetchAllOCRDocuments();
-  }, [activeTab, dateFilter]); // ✅ เพิ่ม dateFilter เป็น dependency
+  }, [activeTab, dateFilter, startDate, endDate]);
 
   /**
    * Handle 401 - Redirect to login
@@ -73,6 +82,17 @@ function DocumentList({
   };
 
   /**
+   * ✅ Format date to YYYY-MM-DD
+   */
+  const formatDate = (date) => {
+    if (!date) return null;
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
+  /**
    * ✅ Fetch all OCR documents with date filter
    */
   const fetchAllOCRDocuments = async () => {
@@ -87,13 +107,21 @@ function DocumentList({
         throw new Error('API_URL is not configured. Set REACT_APP_API_URL in .env');
       }
 
-      // ✅ สร้าง URL พร้อม query parameters
+      // ✅ สร้าง query parameters
       const params = new URLSearchParams({
         document_type: activeTab,
-        date_filter: dateFilter, // ✅ เพิ่ม date_filter
         page: 1,
         per_page: 100
       });
+
+      // ✅ ถ้าเลือก custom date range
+      if (dateFilter === 'custom') {
+        params.append('date_filter', 'all'); // ไม่ใช้ preset filter
+        params.append('date_from', formatDate(startDate));
+        params.append('date_to', formatDate(endDate));
+      } else {
+        params.append('date_filter', dateFilter);
+      }
 
       const apiUrl = `${API_URL}/documents?${params.toString()}`;
       console.log(`🔍 Fetching: ${apiUrl}`);
@@ -312,13 +340,49 @@ function DocumentList({
 
   // ✅ Date Filter Label
   const getDateFilterLabel = () => {
-    switch (dateFilter) {
-      case 'today': return 'วันนี้';
-      case 'this_week': return 'สัปดาห์นี้';
-      case 'this_month': return 'เดือนนี้';
-      case 'all': return 'ทั้งหมด';
-      default: return 'วันนี้';
+    if (dateFilter === 'custom') {
+      return `${formatDate(startDate)} - ${formatDate(endDate)}`;
     }
+    switch (dateFilter) {
+      case 'today': return '📅 วันนี้';
+      case 'this_week': return '📆 สัปดาห์นี้';
+      case 'this_month': return '🗓️ เดือนนี้';
+      case 'all': return '📋 ทั้งหมด';
+      default: return '📅 วันนี้';
+    }
+  };
+
+  // ✅ Handle preset date filter
+  const handlePresetFilter = (filter) => {
+    setDateFilter(filter);
+    setShowFilterMenu(false);
+    
+    // Reset to today if switching from custom
+    if (filter !== 'custom') {
+      setStartDate(new Date());
+      setEndDate(new Date());
+    }
+  };
+
+  // ✅ Handle custom date range
+  const handleCustomDateRange = () => {
+    setDateFilter('custom');
+    setShowFilterMenu(false);
+    setShowDatePicker(true);
+  };
+
+  // ✅ Apply custom date range
+  const applyCustomDateRange = () => {
+    setShowDatePicker(false);
+    // Trigger re-fetch via useEffect
+  };
+
+  // ✅ Clear custom date range
+  const clearCustomDateRange = () => {
+    setDateFilter('today');
+    setStartDate(new Date());
+    setEndDate(new Date());
+    setShowDatePicker(false);
   };
 
   return (
@@ -370,7 +434,7 @@ function DocumentList({
             </button>
           </div>
 
-          <div className="flex gap-3 items-center">
+          <div className="flex gap-3 items-center flex-wrap">
             {/* Search Input */}
             <div className="relative">
               <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
@@ -379,7 +443,7 @@ function DocumentList({
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="ค้นหาเอกสาร..."
-                className="pl-10 pr-4 py-2.5 bg-white/50 backdrop-blur border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                className="pl-10 pr-4 py-2.5 bg-white/50 backdrop-blur border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/50 w-48 md:w-64"
               />
             </div>
 
@@ -390,37 +454,59 @@ function DocumentList({
                 className="px-4 py-2.5 text-gray-700 bg-white/50 rounded-xl hover:bg-white transition-all flex items-center gap-2 border border-gray-200"
               >
                 <Filter className="w-4 h-4" />
-                <span className="hidden md:inline">{getDateFilterLabel()}</span>
+                <span className="hidden md:inline text-sm">{getDateFilterLabel()}</span>
               </button>
 
               {/* Dropdown Menu */}
               {showFilterMenu && (
-                <div className="absolute right-0 mt-2 w-48 bg-white rounded-xl shadow-lg border border-gray-200 py-2 z-50">
-                  <button
-                    onClick={() => { setDateFilter('today'); setShowFilterMenu(false); }}
-                    className={`w-full px-4 py-2 text-left hover:bg-blue-50 transition-colors ${dateFilter === 'today' ? 'bg-blue-50 text-blue-600 font-medium' : 'text-gray-700'}`}
-                  >
-                    📅 วันนี้
-                  </button>
-                  <button
-                    onClick={() => { setDateFilter('this_week'); setShowFilterMenu(false); }}
-                    className={`w-full px-4 py-2 text-left hover:bg-blue-50 transition-colors ${dateFilter === 'this_week' ? 'bg-blue-50 text-blue-600 font-medium' : 'text-gray-700'}`}
-                  >
-                    📆 สัปดาห์นี้
-                  </button>
-                  <button
-                    onClick={() => { setDateFilter('this_month'); setShowFilterMenu(false); }}
-                    className={`w-full px-4 py-2 text-left hover:bg-blue-50 transition-colors ${dateFilter === 'this_month' ? 'bg-blue-50 text-blue-600 font-medium' : 'text-gray-700'}`}
-                  >
-                    🗓️ เดือนนี้
-                  </button>
-                  <button
-                    onClick={() => { setDateFilter('all'); setShowFilterMenu(false); }}
-                    className={`w-full px-4 py-2 text-left hover:bg-blue-50 transition-colors ${dateFilter === 'all' ? 'bg-blue-50 text-blue-600 font-medium' : 'text-gray-700'}`}
-                  >
-                    📋 ทั้งหมด
-                  </button>
-                </div>
+                <>
+                  {/* Backdrop */}
+                  <div 
+                    className="fixed inset-0 z-40" 
+                    onClick={() => setShowFilterMenu(false)}
+                  />
+                  
+                  <div className="absolute right-0 mt-2 w-56 bg-white rounded-xl shadow-lg border border-gray-200 py-2 z-50">
+                    <button
+                      onClick={() => handlePresetFilter('today')}
+                      className={`w-full px-4 py-2.5 text-left hover:bg-blue-50 transition-colors flex items-center gap-2 ${dateFilter === 'today' ? 'bg-blue-50 text-blue-600 font-medium' : 'text-gray-700'}`}
+                    >
+                      <span>📅</span>
+                      <span>วันนี้</span>
+                    </button>
+                    <button
+                      onClick={() => handlePresetFilter('this_week')}
+                      className={`w-full px-4 py-2.5 text-left hover:bg-blue-50 transition-colors flex items-center gap-2 ${dateFilter === 'this_week' ? 'bg-blue-50 text-blue-600 font-medium' : 'text-gray-700'}`}
+                    >
+                      <span>📆</span>
+                      <span>สัปดาห์นี้</span>
+                    </button>
+                    <button
+                      onClick={() => handlePresetFilter('this_month')}
+                      className={`w-full px-4 py-2.5 text-left hover:bg-blue-50 transition-colors flex items-center gap-2 ${dateFilter === 'this_month' ? 'bg-blue-50 text-blue-600 font-medium' : 'text-gray-700'}`}
+                    >
+                      <span>🗓️</span>
+                      <span>เดือนนี้</span>
+                    </button>
+                    <button
+                      onClick={() => handlePresetFilter('all')}
+                      className={`w-full px-4 py-2.5 text-left hover:bg-blue-50 transition-colors flex items-center gap-2 ${dateFilter === 'all' ? 'bg-blue-50 text-blue-600 font-medium' : 'text-gray-700'}`}
+                    >
+                      <span>📋</span>
+                      <span>ทั้งหมด</span>
+                    </button>
+                    
+                    <div className="border-t border-gray-200 my-2"></div>
+                    
+                    <button
+                      onClick={handleCustomDateRange}
+                      className={`w-full px-4 py-2.5 text-left hover:bg-blue-50 transition-colors flex items-center gap-2 ${dateFilter === 'custom' ? 'bg-blue-50 text-blue-600 font-medium' : 'text-gray-700'}`}
+                    >
+                      <CalendarDays className="w-4 h-4" />
+                      <span>กำหนดเองช่วงวันที่...</span>
+                    </button>
+                  </div>
+                </>
               )}
             </div>
 
@@ -433,6 +519,87 @@ function DocumentList({
             </button>
           </div>
         </div>
+
+        {/* ✅ Date Picker Modal */}
+        {showDatePicker && (
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[9999] p-4">
+            <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full p-6">
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+                  <CalendarDays className="w-6 h-6 text-blue-600" />
+                  เลือกช่วงวันที่
+                </h3>
+                <button
+                  onClick={() => setShowDatePicker(false)}
+                  className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                {/* Start Date */}
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                    วันที่เริ่มต้น
+                  </label>
+                  <DatePicker
+                    selected={startDate}
+                    onChange={(date) => setStartDate(date)}
+                    selectsStart
+                    startDate={startDate}
+                    endDate={endDate}
+                    dateFormat="dd/MM/yyyy"
+                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all"
+                    inline
+                  />
+                </div>
+
+                {/* End Date */}
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                    วันที่สิ้นสุด
+                  </label>
+                  <DatePicker
+                    selected={endDate}
+                    onChange={(date) => setEndDate(date)}
+                    selectsEnd
+                    startDate={startDate}
+                    endDate={endDate}
+                    minDate={startDate}
+                    dateFormat="dd/MM/yyyy"
+                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all"
+                    inline
+                  />
+                </div>
+              </div>
+
+              {/* Summary */}
+              <div className="bg-blue-50 rounded-xl p-4 mb-6">
+                <p className="text-sm text-gray-600 mb-1">ช่วงวันที่ที่เลือก:</p>
+                <p className="text-lg font-bold text-blue-600">
+                  {formatDate(startDate)} ถึง {formatDate(endDate)}
+                </p>
+              </div>
+
+              {/* Actions */}
+              <div className="flex gap-3">
+                <button
+                  onClick={clearCustomDateRange}
+                  className="flex-1 px-6 py-3 border-2 border-gray-300 text-gray-700 rounded-xl font-semibold hover:bg-gray-50 transition-all"
+                >
+                  ยกเลิก
+                </button>
+                <button
+                  onClick={applyCustomDateRange}
+                  className="flex-1 px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl font-semibold hover:shadow-lg transition-all"
+                >
+                  ใช้ช่วงวันที่นี้
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Error Message */}
         {ocrError && activeTab === 'incoming' && (
@@ -452,7 +619,7 @@ function DocumentList({
             <div className="p-12 text-center">
               <FileText className="w-16 h-16 text-gray-300 mx-auto mb-4" />
               <p className="text-gray-500">
-                {searchQuery ? 'ไม่พบเอกสารที่ตรงกับการค้นหา' : `ไม่มีเอกสาร${getDateFilterLabel()}`}
+                {searchQuery ? 'ไม่พบเอกสารที่ตรงกับการค้นหา' : `ไม่มีเอกสาร${dateFilter === 'custom' ? 'ในช่วงวันที่นี้' : getDateFilterLabel()}`}
               </p>
             </div>
           ) : (
