@@ -320,90 +320,12 @@ function DocumentForm({ onClose, onSubmit }) {
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
-  // ✅ ฟังก์ชันแปลงวันที่
-const convertDateToISO = (dateStr) => {
-  if (!dateStr) return null;
+  const handleSubmit = () => {
+  console.log('✅ กดปุ่มเสร็จสิ้น - ปิด modal');
   
-  if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
-    return dateStr;
-  }
-  
-  if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(dateStr)) {
-    const [day, month, year] = dateStr.split('/');
-    return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
-  }
-  
-  return null;
-};
-
-// ✅ ฟังก์ชันสำหรับปุ่ม "เสร็จสิ้น"
-const handleSubmit = async () => {
-  if (!result?.id) {
-    alert('⚠️ ไม่มีเอกสารให้บันทึก');
-    return;
-  }
-
-  console.log('✅ กดปุ่มเสร็จสิ้น - กำลังอัพเดตเอกสาร...');
-
-  try {
-    const priorityMap = {
-      'ปกติ': 'normal',
-      'ด่วน': 'urgent',
-      'ด่วนมาก': 'very_urgent',
-      'ด่วนที่สุด': 'highest'
-    };
-
-    const updateData = {
-      title: formData.title || 'ไม่มีชื่อเอกสาร',
-      document_number: formData.documentNo || '',
-      document_type: formData.type || 'incoming',
-      from_department: formData.from || '',
-      priority: priorityMap[formData.priority] || 'normal',
-      status: 'pending',
-      due_date: convertDateToISO(formData.date),
-      assigned_to: formData.to && !isNaN(formData.to) ? parseInt(formData.to) : null
-    };
-
-    Object.keys(updateData).forEach(key => {
-      if (updateData[key] === null) {
-        delete updateData[key];
-      }
-    });
-
-    console.log('📤 ข้อมูลที่จะส่ง:', updateData);
-
-    if (onSubmit) {
-      await onSubmit({
-        id: result.id,
-        ...updateData
-      });
-      
-      console.log('✅ อัพเดตสำเร็จ!');
-      
-      if (onClose) {
-        onClose();
-      }
-    }
-  } catch (err) {
-    console.error('❌ Error:', err);
-    
-    let errorMessage = '';
-    if (err.response?.data) {
-      const errorData = err.response.data;
-      if (typeof errorData === 'string') {
-        errorMessage = errorData;
-      } else if (errorData.detail) {
-        errorMessage = Array.isArray(errorData.detail) 
-          ? errorData.detail.map((e, i) => `${i + 1}. ${e.msg || JSON.stringify(e)}`).join('\n')
-          : errorData.detail;
-      } else {
-        errorMessage = JSON.stringify(errorData, null, 2);
-      }
-    } else {
-      errorMessage = err.message || 'ไม่ทราบสาเหตุ';
-    }
-    
-    alert('⚠️ ไม่สามารถอัพเดตเอกสารได้\n\n' + errorMessage);
+  // ปิด modal
+  if (onClose) {
+    onClose();
   }
 };
 
