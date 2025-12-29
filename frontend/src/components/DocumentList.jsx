@@ -4,9 +4,27 @@ import { X, User, Calendar, FileText, Edit, TrendingUp, Save } from 'lucide-reac
 function DocumentDetail({ document = null, onClose = () => {}, onUpdate = () => {} }) {
   const API_URL = process.env.REACT_APP_API_URL;
   
-  // ✅ Guard Clause - ตรวจสอบก่อนใช้งาน
-  if (!document) {
-    console.error('❌ DocumentDetail: document prop is undefined');
+  // ✅ ประกาศ hooks ก่อน (ต้องอยู่ด้านบนสุด)
+  const [workflowHistory, setWorkflowHistory] = useState([]);
+  const [loadingWorkflow, setLoadingWorkflow] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [editData, setEditData] = useState({
+    title: '',
+    from: '',
+    to: '',
+    date: '',
+    status: 'รับเข้า',
+    priority: 'ปกติ',
+    subject: '',
+    department: '',
+    documentNo: ''
+  });
+  const [currentStatus, setCurrentStatus] = useState('รับเข้า');
+  const [completedByName, setCompletedByName] = useState('');
+
+  // ✅ Guard Clause - ตรวจสอบหลัง hooks
+  if (!document || !document.id) {
     return (
       <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
         <div className="bg-white rounded-2xl p-6 max-w-md w-full text-center">
@@ -22,30 +40,9 @@ function DocumentDetail({ document = null, onClose = () => {}, onUpdate = () => 
       </div>
     );
   }
-
-  if (!document.id) {
-    console.error('❌ DocumentDetail: document.id is undefined');
-    return (
-      <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-        <div className="bg-white rounded-2xl p-6 max-w-md w-full text-center">
-          <p className="text-red-600 font-semibold mb-4">⚠️ เอกสารไม่มี ID</p>
-          <p className="text-sm text-gray-600 mb-4">ข้อมูลเอกสารไม่สมบูรณ์</p>
-          <button
-            onClick={onClose}
-            className="px-6 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-all"
-          >
-            ปิด
-          </button>
-        </div>
-      </div>
-    );
-  }
   
   console.log('🔍 DocumentDetail received:', document);
   
-  const [workflowHistory, setWorkflowHistory] = useState([]);
-  const [loadingWorkflow, setLoadingWorkflow] = useState(false);
-
   const normalizedDoc = {
     id: document.id,
     title: document.title,
@@ -63,8 +60,39 @@ function DocumentDetail({ document = null, onClose = () => {}, onUpdate = () => 
     completed_by_name: document.completed_by_name || ''
   };
 
+  // ✅ useEffect สำหรับ initialize data
+  useEffect(() => {
+    if (document && document.id) {
+      const normalizeStatus = (status) => {
+        if (!status) return 'รับเข้า';
+        const normalized = status.toLowerCase().trim();
+        if (normalized === 'รับแล้ว' || normalized === 'received' || normalized === 'incoming' || normalized === 'processed') return 'รับเข้า';
+        if (normalized === 'รออนุมัติ' || normalized === 'pending approval' || normalized === 'approval pending' || normalized === 'กำลังดำเนินการ' || normalized === 'in_progress') return 'รออนุมัติ';
+        if (normalized === 'ส่งออก' || normalized === 'sent out' || normalized === 'sent_out' || normalized === 'เอกสารส่งออก') return 'ส่งออก';
+        if (normalized === 'เสร็จสิ้น' || normalized === 'completed' || normalized === 'done') return 'เสร็จสิ้น';
+        return 'รับเข้า';
+      };
+
+      setEditData({
+        title: normalizedDoc.title || '',
+        from: normalizedDoc.from || '',
+        to: normalizedDoc.to || '',
+        date: normalizedDoc.date || '',
+        status: normalizeStatus(normalizedDoc.status) || 'รับเข้า',
+        priority: normalizedDoc.priority || 'ปกติ',
+        subject: normalizedDoc.subject || '',
+        department: normalizedDoc.department || '',
+        documentNo: normalizedDoc.documentNo || ''
+      });
+
+      setCurrentStatus(normalizeStatus(normalizedDoc.status));
+    }
+  }, [document]);
+
   useEffect(() => {
     const fetchWorkflowHistory = async () => {
+      if (!document || !document.id) return;
+      
       setLoadingWorkflow(true);
       try {
         const token = localStorage.getItem('access_token');
@@ -84,6 +112,12 @@ function DocumentDetail({ document = null, onClose = () => {}, onUpdate = () => 
           const data = await response.json();
           console.log('📋 Workflow History:', data);
           setWorkflowHistory(Array.isArray(data.workflows) ? data.workflows : data.workflows || []);
+          
+          // Update completedByName
+          const completeWorkflow = (Array.isArray(data.workflows) ? data.workflows : []).find(w => w.action === 'complete');
+          if (completeWorkflow?.completed_by_name) {
+            setCompletedByName(completeWorkflow.completed_by_name);
+          }
         }
       } catch (error) {
         console.error('❌ Failed to fetch workflow history:', error);
@@ -92,15 +126,8 @@ function DocumentDetail({ document = null, onClose = () => {}, onUpdate = () => 
       }
     };
 
-    if (document.id) {
-      fetchWorkflowHistory();
-    }
-  }, [document.id, API_URL]);
-
-  const getCompletedByName = () => {
-    const completeWorkflow = workflowHistory.find(w => w.action === 'complete');
-    return completeWorkflow?.completed_by_name || normalizedDoc.completed_by_name || '';
-  };
+    fetchWorkflowHistory();
+  }, [document, API_URL]);
 
   const normalizeStatus = (status) => {
     if (!status) return 'รับเข้า';
@@ -111,27 +138,6 @@ function DocumentDetail({ document = null, onClose = () => {}, onUpdate = () => 
     if (normalized === 'เสร็จสิ้น' || normalized === 'completed' || normalized === 'done') return 'เสร็จสิ้น';
     return 'รับเข้า';
   };
-
-  const [isEditing, setIsEditing] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
-  const [editData, setEditData] = useState({
-    title: normalizedDoc.title || '',
-    from: normalizedDoc.from || '',
-    to: normalizedDoc.to || '',
-    date: normalizedDoc.date || '',
-    status: normalizeStatus(normalizedDoc.status) || 'รับเข้า',
-    priority: normalizedDoc.priority || 'ปกติ',
-    subject: normalizedDoc.subject || '',
-    department: normalizedDoc.department || '',
-    documentNo: normalizedDoc.documentNo || ''
-  });
-
-  const [currentStatus, setCurrentStatus] = useState(normalizeStatus(normalizedDoc.status));
-  const [completedByName, setCompletedByName] = useState(() => getCompletedByName());
-
-  useEffect(() => {
-    setCompletedByName(getCompletedByName());
-  }, [workflowHistory]);
 
   const handleUnauthorized = () => {
     console.error('🔐 Token expired or invalid');
@@ -178,13 +184,6 @@ function DocumentDetail({ document = null, onClose = () => {}, onUpdate = () => 
 
       if (next.action === 'complete' && !completedByName.trim()) {
         alert('⚠️ กรุณากรอกชื่อผู้ดำเนินการก่อนทำเสร็จสิ้น');
-        setIsLoading(false);
-        return;
-      }
-
-      if (!document.id) {
-        console.error('❌ ไม่มี document.id');
-        alert('⚠️ ไม่พบ ID ของเอกสาร');
         setIsLoading(false);
         return;
       }
@@ -432,6 +431,7 @@ function DocumentDetail({ document = null, onClose = () => {}, onUpdate = () => 
   return (
     <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-3xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden">
+        {/* Header */}
         <div className="sticky top-0 bg-gradient-to-r from-blue-50 to-indigo-50 p-6 border-b border-gray-100">
           <div className="flex items-start justify-between">
             <div className="flex-1 pr-4">
@@ -489,6 +489,7 @@ function DocumentDetail({ document = null, onClose = () => {}, onUpdate = () => 
           </div>
         </div>
         
+        {/* Body */}
         <div className="p-6 space-y-6 overflow-y-auto max-h-[calc(90vh-250px)]">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl p-5 border-2 border-blue-100">
@@ -633,6 +634,7 @@ function DocumentDetail({ document = null, onClose = () => {}, onUpdate = () => 
           )}
         </div>
 
+        {/* Footer */}
         <div className="flex gap-4 p-6 border-t border-gray-100 bg-gradient-to-r from-gray-50 to-blue-50">
           {isEditing ? (
             <>
