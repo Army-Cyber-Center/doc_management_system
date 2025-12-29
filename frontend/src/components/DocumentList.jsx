@@ -1,8 +1,45 @@
 import React, { useState, useEffect } from 'react';
 import { X, User, Calendar, FileText, Edit, TrendingUp, Save } from 'lucide-react';
 
-function DocumentDetail({ document, onClose, onUpdate }) {
+function DocumentDetail({ document = null, onClose = () => {}, onUpdate = () => {} }) {
   const API_URL = process.env.REACT_APP_API_URL;
+  
+  // ✅ Guard Clause - ตรวจสอบก่อนใช้งาน
+  if (!document) {
+    console.error('❌ DocumentDetail: document prop is undefined');
+    return (
+      <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+        <div className="bg-white rounded-2xl p-6 max-w-md w-full text-center">
+          <p className="text-red-600 font-semibold mb-4">⚠️ ไม่พบข้อมูลเอกสาร</p>
+          <p className="text-sm text-gray-600 mb-4">กรุณาลองใหม่อีกครั้ง</p>
+          <button
+            onClick={onClose}
+            className="px-6 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-all"
+          >
+            ปิด
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!document.id) {
+    console.error('❌ DocumentDetail: document.id is undefined');
+    return (
+      <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+        <div className="bg-white rounded-2xl p-6 max-w-md w-full text-center">
+          <p className="text-red-600 font-semibold mb-4">⚠️ เอกสารไม่มี ID</p>
+          <p className="text-sm text-gray-600 mb-4">ข้อมูลเอกสารไม่สมบูรณ์</p>
+          <button
+            onClick={onClose}
+            className="px-6 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-all"
+          >
+            ปิด
+          </button>
+        </div>
+      </div>
+    );
+  }
   
   console.log('🔍 DocumentDetail received:', document);
   
