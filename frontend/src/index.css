@@ -85,34 +85,50 @@ code {
   animation: fade-in 0.3s ease-out;
 }
 
+/* ✅ DatePicker Custom Styles - Compact Version */
 .react-datepicker {
   font-family: inherit !important;
   border: 2px solid #e5e7eb !important;
   border-radius: 12px !important;
   box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1) !important;
+  font-size: 0.875rem !important; /* ✅ ลดขนาดตัวอักษร */
 }
 
 .react-datepicker__header {
   background-color: #3b82f6 !important;
   border-bottom: none !important;
   border-radius: 10px 10px 0 0 !important;
-  padding-top: 12px !important;
+  padding-top: 8px !important; /* ✅ ลด padding */
 }
 
-.react-datepicker__current-month,
+.react-datepicker__current-month {
+  color: white !important;
+  font-weight: 600 !important;
+  font-size: 0.875rem !important; /* ✅ ลดขนาดตัวอักษร */
+  margin-bottom: 4px !important; /* ✅ ลดระยะห่าง */
+}
+
+.react-datepicker__day-name,
+.react-datepicker__day {
+  width: 2rem !important; /* ✅ ลดขนาดช่อง (จาก default ~2.5rem) */
+  line-height: 2rem !important;
+  margin: 0.166rem !important; /* ✅ ลดระยะห่าง */
+  font-size: 0.75rem !important; /* ✅ ลดขนาดตัวอักษร */
+}
+
 .react-datepicker__day-name {
   color: white !important;
   font-weight: 600 !important;
 }
 
 .react-datepicker__day {
-  border-radius: 8px !important;
+  border-radius: 6px !important; /* ✅ ลดความโค้งมน */
   transition: all 0.2s !important;
 }
 
 .react-datepicker__day:hover {
   background-color: #dbeafe !important;
-  border-radius: 8px !important;
+  border-radius: 6px !important;
 }
 
 .react-datepicker__day--selected,
@@ -120,20 +136,20 @@ code {
 .react-datepicker__day--in-selecting-range {
   background-color: #3b82f6 !important;
   color: white !important;
-  border-radius: 8px !important;
+  border-radius: 6px !important;
 }
 
 .react-datepicker__day--keyboard-selected {
   background-color: #60a5fa !important;
   color: white !important;
-  border-radius: 8px !important;
+  border-radius: 6px !important;
 }
 
 .react-datepicker__day--range-start,
 .react-datepicker__day--range-end {
   background-color: #1e40af !important;
   color: white !important;
-  border-radius: 8px !important;
+  border-radius: 6px !important;
 }
 
 .react-datepicker__day--disabled {
@@ -142,9 +158,30 @@ code {
 }
 
 .react-datepicker__navigation {
-  top: 16px !important;
+  top: 12px !important; /* ✅ ปรับตำแหน่งปุ่ม */
+  width: 24px !important; /* ✅ ลดขนาดปุ่ม */
+  height: 24px !important;
 }
 
 .react-datepicker__navigation-icon::before {
   border-color: white !important;
+  border-width: 2px 2px 0 0 !important; /* ✅ ลดความหนาของลูกศร */
+  height: 7px !important; /* ✅ ลดขนาดลูกศร */
+  width: 7px !important;
+}
+
+/* ✅ ลดขนาด Month Container */
+.react-datepicker__month-container {
+  width: auto !important;
+}
+
+.react-datepicker__month {
+  margin: 0.4rem !important; /* ✅ ลด margin */
+  padding: 0.4rem !important; /* ✅ ลด padding */
+}
+
+/* ✅ ลดขนาด Week */
+.react-datepicker__week {
+  display: flex !important;
+  justify-content: space-around !important;
 }

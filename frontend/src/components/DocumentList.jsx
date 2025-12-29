@@ -11,11 +11,17 @@ import {
   ArrowUpRight,
   CheckCircle2,
   Search,
-  X,
   CalendarDays
 } from 'lucide-react';
-import DatePicker from 'react-datepicker';
-import 'react-datepicker/dist/react-datepicker.css';
+import { DatePicker } from 'antd'; // ✅ Import DatePicker จาก antd
+import dayjs from 'dayjs'; // ✅ Import dayjs
+import 'antd/dist/reset.css'; // ✅ Import Ant Design CSS
+import 'dayjs/locale/th'; // ✅ Import Thai locale
+
+const { RangePicker } = DatePicker; // ✅ ใช้ RangePicker
+
+// ✅ Set Thai locale
+dayjs.locale('th');
 
 function DocumentList({
   activeTab,
@@ -40,18 +46,17 @@ function DocumentList({
 
   // 🔍 Search & Filter
   const [searchQuery, setSearchQuery] = useState('');
-  const [dateFilter, setDateFilter] = useState('today'); // 'today', 'this_week', 'this_month', 'custom', 'all'
+  const [dateFilter, setDateFilter] = useState('today');
   const [showFilterMenu, setShowFilterMenu] = useState(false);
   
-  // ✅ Date Range Picker
-  const [startDate, setStartDate] = useState(new Date());
-  const [endDate, setEndDate] = useState(new Date());
+  // ✅ Date Range Picker - ใช้ dayjs
+  const [dateRange, setDateRange] = useState([dayjs(), dayjs()]);
   const [showDatePicker, setShowDatePicker] = useState(false);
   
-  // ✅ Fetch documents เมื่อ activeTab, dateFilter, หรือ custom dates เปลี่ยน
+  // ✅ Fetch documents เมื่อ activeTab, dateFilter, หรือ dateRange เปลี่ยน
   useEffect(() => {
     fetchAllOCRDocuments();
-  }, [activeTab, dateFilter, startDate, endDate]);
+  }, [activeTab, dateFilter, dateRange]);
 
   /**
    * Handle 401 - Redirect to login
@@ -86,10 +91,7 @@ function DocumentList({
    */
   const formatDate = (date) => {
     if (!date) return null;
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
+    return dayjs(date).format('YYYY-MM-DD');
   };
 
   /**
@@ -115,10 +117,10 @@ function DocumentList({
       });
 
       // ✅ ถ้าเลือก custom date range
-      if (dateFilter === 'custom') {
-        params.append('date_filter', 'all'); // ไม่ใช้ preset filter
-        params.append('date_from', formatDate(startDate));
-        params.append('date_to', formatDate(endDate));
+      if (dateFilter === 'custom' && dateRange && dateRange.length === 2) {
+        params.append('date_filter', 'all');
+        params.append('date_from', formatDate(dateRange[0]));
+        params.append('date_to', formatDate(dateRange[1]));
       } else {
         params.append('date_filter', dateFilter);
       }
@@ -144,14 +146,11 @@ function DocumentList({
       const data = await response.json();
       console.log('✅ Documents fetched:', data);
 
-      // Handle different response formats
       const documentsList = Array.isArray(data) 
         ? data 
         : data.data || data.documents || [];
 
       setOcrDocuments(documentsList);
-
-      // ✅ Calculate statistics
       calculateStats(documentsList);
 
     } catch (err) {
@@ -164,7 +163,7 @@ function DocumentList({
   };
 
   /**
-   * ✅ Normalize status to unified format
+   * ✅ Normalize status
    */
   const normalizeStatus = (status) => {
     if (!status) return 'รับเข้า';
@@ -188,7 +187,7 @@ function DocumentList({
   };
 
   /**
-   * ✅ Calculate document statistics
+   * ✅ Calculate statistics
    */
   const calculateStats = (documentsList) => {
     const newStats = {
@@ -217,7 +216,7 @@ function DocumentList({
   };
 
   /**
-   * Fetch single OCR document by ID
+   * Fetch single document
    */
   const fetchOCRDocument = async (documentId) => {
     try {
@@ -229,8 +228,6 @@ function DocumentList({
       }
 
       const apiUrl = `${API_URL}/documents/${documentId}`;
-      console.log(`🔍 Fetching document: ${apiUrl}`);
-
       const response = await fetch(apiUrl, {
         method: 'GET',
         headers: headers
@@ -245,9 +242,7 @@ function DocumentList({
         throw new Error(`${response.status} ${response.statusText}`);
       }
 
-      const data = await response.json();
-      console.log('✅ Document fetched');
-      return data;
+      return await response.json();
 
     } catch (err) {
       console.error('❌ Error fetching document:', err.message);
@@ -255,7 +250,6 @@ function DocumentList({
     }
   };
 
-  // ✅ Use OCR documents if available
   const displayDocuments = activeTab === 'incoming' 
     ? ocrDocuments 
     : (Array.isArray(documents) ? documents : []);
@@ -310,9 +304,6 @@ function DocumentList({
     }
   };
 
-  /**
-   * Handle document click
-   */
   const handleDocumentClick = async (doc) => {
     try {
       if (doc.document_id) {
@@ -327,7 +318,7 @@ function DocumentList({
     }
   };
 
-  // ✅ Statistics Card Component
+  // ✅ Statistics Card
   const StatCard = ({ icon: Icon, label, value, color }) => (
     <div className="flex flex-col items-center p-4 bg-white rounded-xl border border-gray-100 hover:border-gray-200 transition-all">
       <div className={`w-12 h-12 ${color} rounded-xl flex items-center justify-center mb-2`}>
@@ -340,8 +331,8 @@ function DocumentList({
 
   // ✅ Date Filter Label
   const getDateFilterLabel = () => {
-    if (dateFilter === 'custom') {
-      return `${formatDate(startDate)} - ${formatDate(endDate)}`;
+    if (dateFilter === 'custom' && dateRange && dateRange.length === 2) {
+      return `${formatDate(dateRange[0])} - ${formatDate(dateRange[1])}`;
     }
     switch (dateFilter) {
       case 'today': return '📅 วันนี้';
@@ -352,15 +343,13 @@ function DocumentList({
     }
   };
 
-  // ✅ Handle preset date filter
+  // ✅ Handle preset filter
   const handlePresetFilter = (filter) => {
     setDateFilter(filter);
     setShowFilterMenu(false);
     
-    // Reset to today if switching from custom
     if (filter !== 'custom') {
-      setStartDate(new Date());
-      setEndDate(new Date());
+      setDateRange([dayjs(), dayjs()]);
     }
   };
 
@@ -371,23 +360,28 @@ function DocumentList({
     setShowDatePicker(true);
   };
 
+  // ✅ Handle date range change
+  const handleDateRangeChange = (dates) => {
+    if (dates && dates.length === 2) {
+      setDateRange(dates);
+    }
+  };
+
   // ✅ Apply custom date range
   const applyCustomDateRange = () => {
     setShowDatePicker(false);
-    // Trigger re-fetch via useEffect
   };
 
   // ✅ Clear custom date range
   const clearCustomDateRange = () => {
     setDateFilter('today');
-    setStartDate(new Date());
-    setEndDate(new Date());
+    setDateRange([dayjs(), dayjs()]);
     setShowDatePicker(false);
   };
 
   return (
     <div className="space-y-6">
-      {/* ✅ Statistics Dashboard */}
+      {/* Statistics Dashboard */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <StatCard
           icon={Inbox}
@@ -447,7 +441,7 @@ function DocumentList({
               />
             </div>
 
-            {/* ✅ Date Filter Dropdown */}
+            {/* Date Filter Dropdown */}
             <div className="relative">
               <button 
                 onClick={() => setShowFilterMenu(!showFilterMenu)}
@@ -457,10 +451,8 @@ function DocumentList({
                 <span className="hidden md:inline text-sm">{getDateFilterLabel()}</span>
               </button>
 
-              {/* Dropdown Menu */}
               {showFilterMenu && (
                 <>
-                  {/* Backdrop */}
                   <div 
                     className="fixed inset-0 z-40" 
                     onClick={() => setShowFilterMenu(false)}
@@ -503,7 +495,7 @@ function DocumentList({
                       className={`w-full px-4 py-2.5 text-left hover:bg-blue-50 transition-colors flex items-center gap-2 ${dateFilter === 'custom' ? 'bg-blue-50 text-blue-600 font-medium' : 'text-gray-700'}`}
                     >
                       <CalendarDays className="w-4 h-4" />
-                      <span>กำหนดเองช่วงวันที่...</span>
+                      <span>กำหนดช่วงวันที่...</span>
                     </button>
                   </div>
                 </>
@@ -520,79 +512,56 @@ function DocumentList({
           </div>
         </div>
 
-        {/* ✅ Date Picker Modal */}
+        {/* ✅ Ant Design Date Picker Modal */}
         {showDatePicker && (
           <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[9999] p-4">
-            <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full p-6">
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6">
               <div className="flex items-center justify-between mb-6">
-                <h3 className="text-xl font-bold text-gray-900 flex items-center gap-2">
-                  <CalendarDays className="w-6 h-6 text-blue-600" />
+                <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+                  <CalendarDays className="w-5 h-5 text-blue-600" />
                   เลือกช่วงวันที่
                 </h3>
                 <button
                   onClick={() => setShowDatePicker(false)}
                   className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
                 >
-                  <X className="w-5 h-5" />
+                  <span className="text-2xl leading-none">&times;</span>
                 </button>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-                {/* Start Date */}
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">
-                    วันที่เริ่มต้น
-                  </label>
-                  <DatePicker
-                    selected={startDate}
-                    onChange={(date) => setStartDate(date)}
-                    selectsStart
-                    startDate={startDate}
-                    endDate={endDate}
-                    dateFormat="dd/MM/yyyy"
-                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all"
-                    inline
-                  />
-                </div>
-
-                {/* End Date */}
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">
-                    วันที่สิ้นสุด
-                  </label>
-                  <DatePicker
-                    selected={endDate}
-                    onChange={(date) => setEndDate(date)}
-                    selectsEnd
-                    startDate={startDate}
-                    endDate={endDate}
-                    minDate={startDate}
-                    dateFormat="dd/MM/yyyy"
-                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all"
-                    inline
-                  />
-                </div>
+              {/* ✅ Ant Design RangePicker */}
+              <div className="mb-6">
+                <RangePicker
+                  value={dateRange}
+                  onChange={handleDateRangeChange}
+                  format="DD/MM/YYYY"
+                  placeholder={['วันที่เริ่มต้น', 'วันที่สิ้นสุด']}
+                  style={{ width: '100%' }}
+                  size="large"
+                />
               </div>
 
               {/* Summary */}
-              <div className="bg-blue-50 rounded-xl p-4 mb-6">
-                <p className="text-sm text-gray-600 mb-1">ช่วงวันที่ที่เลือก:</p>
-                <p className="text-lg font-bold text-blue-600">
-                  {formatDate(startDate)} ถึง {formatDate(endDate)}
-                </p>
-              </div>
+              {dateRange && dateRange.length === 2 && (
+                <div className="bg-blue-50 rounded-xl p-4 mb-6">
+                  <p className="text-xs text-gray-600 mb-1">ช่วงวันที่ที่เลือก:</p>
+                  <p className="text-base font-bold text-blue-600">
+                    {formatDate(dateRange[0])} ถึง {formatDate(dateRange[1])}
+                  </p>
+                </div>
+              )}
 
               {/* Actions */}
               <div className="flex gap-3">
                 <button
                   onClick={clearCustomDateRange}
-                  className="flex-1 px-6 py-3 border-2 border-gray-300 text-gray-700 rounded-xl font-semibold hover:bg-gray-50 transition-all"
+                  className="flex-1 px-4 py-2.5 border-2 border-gray-300 text-gray-700 rounded-xl font-semibold hover:bg-gray-50 transition-all"
                 >
                   ยกเลิก
                 </button>
                 <button
                   onClick={applyCustomDateRange}
-                  className="flex-1 px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl font-semibold hover:shadow-lg transition-all"
+                  className="flex-1 px-4 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl font-semibold hover:shadow-lg transition-all"
                 >
                   ใช้ช่วงวันที่นี้
                 </button>
@@ -608,7 +577,7 @@ function DocumentList({
           </div>
         )}
 
-        {/* List */}
+        {/* Document List */}
         <div className="divide-y divide-gray-100">
           {isLoading ? (
             <div className="p-12 text-center">
