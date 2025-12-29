@@ -4,6 +4,23 @@ import { X, User, Calendar, FileText, Edit, TrendingUp, Save } from 'lucide-reac
 function DocumentDetail({ document, onClose, onUpdate }) {
   const API_URL = process.env.REACT_APP_API_URL;
   
+  // ✅ Guard clause - ต้องอยู่หลัง function declaration แต่ก่อน hooks
+  if (!document || !document.id) {
+    return (
+      <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+        <div className="bg-white rounded-2xl p-6 max-w-md w-full text-center">
+          <p className="text-red-600 font-semibold mb-4">⚠️ ไม่พบข้อมูลเอกสาร</p>
+          <button
+            onClick={onClose}
+            className="px-6 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-all"
+          >
+            ปิด
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   console.log('🔍 DocumentDetail received:', document);
   
   const [workflowHistory, setWorkflowHistory] = useState([]);
