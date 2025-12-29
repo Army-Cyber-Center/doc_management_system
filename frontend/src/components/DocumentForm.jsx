@@ -268,6 +268,118 @@ function DocumentForm({ onClose, onSubmit }) {
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
+  // ✅ ฟังก์ชันสำหรับปุ่ม "เสร็จสิ้น" - เรียก API จนกว่าจะได้ข้อมูล
+  const handleSubmit = async () => {
+    if (!result?.id) {
+      alert('⚠️ ไม่มีเอกสารให้บันทึก');
+      return;
+    }
+
+    setLoadingDetails(true);
+    setProgress(0);
+    setProgressMessage('🔍 กำลังตรวจสอบข้อมูล OCR...');
+
+    const maxAttempts = 60; // ลองสูงสุด 60 ครั้ง (3 นาที)
+    const interval = 3000; // รอ 3 วินาทีระหว่างการลอง
+    let attempts = 0;
+
+    try {
+      while (attempts < maxAttempts) {
+        attempts++;
+        const progressPercent = Math.min((attempts / maxAttempts) * 90, 90);
+        setProgress(progressPercent);
+
+        const elapsed = attempts * 3;
+        if (elapsed < 30) {
+          setProgressMessage('🔍 กำลังวิเคราะห์เอกสาร...');
+        } else if (elapsed < 60) {
+          setProgressMessage('📝 กำลังแยกข้อความจากเอกสาร...');
+        } else if (elapsed < 90) {
+          setProgressMessage('🔄 กำลังประมวลผลข้อมูล...');
+        } else if (elapsed < 120) {
+          setProgressMessage('⏳ เกือบเสร็จแล้ว กรุณารอสักครู่...');
+        } else {
+          setProgressMessage('⌛ กำลังประมวลผลขั้นสุดท้าย...');
+        }
+
+        console.log(`🔄 [${elapsed}s] ลองครั้งที่ ${attempts}/${maxAttempts}...`);
+
+        try {
+          const data = await getDocument(result.id);
+
+          // ✅ เช็คว่ามี OCR data หรือไม่
+          const hasOCRData = data?.ocr_data?.text && data?.ocr_data?.text.length > 0;
+
+          if (hasOCRData) {
+            console.log('✅ ได้ข้อมูล OCR แล้ว!');
+            setProgress(100);
+            setProgressMessage('✅ ประมวลผลสำเร็จ!');
+
+            // ✅ ดึง raw text และ parsed_fields
+            const rawText = data.ocr_data?.text || '';
+            const parsedFieldsFromAPI = data.ocr_data?.parsed_fields || {};
+
+            console.log('📝 Raw text:', rawText);
+            console.log('📋 Parsed fields:', parsedFieldsFromAPI);
+
+            const parsed = parseOCRText(rawText, parsedFieldsFromAPI);
+            console.log('✅ Parsed result:', parsed);
+
+            // ✅ อัพเดตข้อมูลในฟอร์ม
+            setDocumentDetails({
+              ...parsed,
+              ocr_id: result.id,
+              full_raw_text: rawText
+            });
+
+            setTimeout(() => {
+              setLoadingDetails(false);
+              setProgress(0);
+              setProgressMessage('');
+              
+              // ✅ เรียก onSubmit พร้อมข้อมูลที่สมบูรณ์
+              if (onSubmit) {
+                onSubmit({
+                  ...formData,
+                  ...parsed,
+                  ocr_id: result.id,
+                  full_raw_text: rawText
+                });
+              }
+            }, 500);
+
+            return; // ✅ ออกจาก loop เมื่อได้ข้อมูลแล้ว
+          }
+        } catch (err) {
+          console.warn(`⚠️ ครั้งที่ ${attempts} ยังไม่พร้อม:`, err.message);
+        }
+
+        // ✅ รอก่อนลองใหม่
+        if (attempts < maxAttempts) {
+          await new Promise(resolve => setTimeout(resolve, interval));
+        }
+      }
+
+      // ❌ ถ้าลองครบแล้วยังไม่ได้ข้อมูล
+      throw new Error('⏱️ ระบบใช้เวลานานเกินไป (เกิน 3 นาที)');
+
+    } catch (err) {
+      console.error('❌ เกิดข้อผิดพลาด:', err);
+      setProgress(0);
+      setProgressMessage('');
+      setLoadingDetails(false);
+
+      alert(
+        '⚠️ ระบบใช้เวลานานเกินไป (เกิน 3 นาที)\n\n' +
+        'กรุณา:\n' +
+        '1. ตรวจสอบขนาดไฟล์ (ควร < 5MB)\n' +
+        '2. ตรวจสอบคุณภาพภาพ (ชัดเจน ไม่เบลอ)\n' +
+        '3. ลองอัพโหลดใหม่อีกครั้ง\n' +
+        '4. ติดต่อผู้ดูแลระบบหากปัญหายังคงอยู่'
+      );
+    }
+  };
+
   // ✅ Crop Modal
   if (cropModalOpen) {
     return (
@@ -722,10 +834,11 @@ function DocumentForm({ onClose, onSubmit }) {
                   />
                 </div>
                 
+                {/* ✅ ปุ่มเสร็จสิ้น - เรียก handleSubmit */}
                 <div className="flex gap-4 pt-4">
                   <button
                     type="button"
-                    onClick={onClose}
+                    onClick={handleSubmit}
                     disabled={loadingDetails}
                     className="flex-1 px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl font-semibold hover:shadow-lg hover:shadow-blue-500/30 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                   >
@@ -804,7 +917,7 @@ function DocumentForm({ onClose, onSubmit }) {
 
               <div className="flex items-center justify-center gap-2 text-xs text-gray-500 mb-4">
                 <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
-                <span>ระบบกำลังดึงข้อมูล OCR</span>
+                <span>อาจใช้เวลาประมาณ 1-3 นาที</span>
               </div>
 
               {progress > 0 && progress < 100 && (
